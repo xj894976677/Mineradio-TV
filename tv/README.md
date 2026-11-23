@@ -14,8 +14,8 @@ Mineradio's stage on an Android TV, for music on a USB drive. Offline: no accoun
 - Plugging in a drive starts playing; the last track and position resume on the next start.
 - Title, artist, album and cover come from the files' tags; a same-name `.lrc` is the lyrics and a
   `cover.jpg` / `folder.jpg` in the folder is the cover of files that embed none.
-- Remote: OK play / pause, left / right previous / next (hold to seek), up the library (all songs,
-  folders, albums, artists), down the settings (play order, visual, lyrics, render detail), back
+- Remote: left / right previous / next (hold to seek), up / down the next visual, OK play / pause,
+  hold OK for the library (all songs, folders, albums, artists), Menu for the settings, back
   twice to leave.
 - Mineradio's online sources (`*-api.js`, `server.js`) are not part of the TV app.
 

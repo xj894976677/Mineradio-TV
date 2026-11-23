@@ -56,16 +56,44 @@
     '<div id="mrtv-hud-bar"><div id="mrtv-hud-fill"></div></div>' +
     '<div id="mrtv-hud-meta"><span id="mrtv-hud-time"></span><span id="mrtv-hud-pos"></span><span id="mrtv-hud-state"></span></div>' +
     '</div></div>' +
-    '<div id="mrtv-keys"><div><b>OK</b>播放 / 暂停<b>◀ ▶</b>上一首 / 下一首（长按快进）</div><div><b>▲</b>曲库<b>▼</b>设置<b>返回</b>退出</div></div>' +
+    '<div id="mrtv-keys"><div><b>◀ ▶</b>上一首 / 下一首（长按快进）<b>▲ ▼</b>切换视觉</div><div><b>OK</b>播放 / 暂停（长按打开曲库）<b>菜单</b>设置</div></div>' +
     '<div id="mrtv-toast"></div>' +
     '<div id="mrtv-empty"><h1 id="mrtv-empty-title"></h1><p id="mrtv-empty-line1"></p><p id="mrtv-empty-line2"></p><div class="mrtv-btn" id="mrtv-empty-btn"></div></div>' +
     '<div class="mrtv-panel" id="mrtv-library"><h2>曲库<small id="mrtv-lib-note"></small></h2>' +
     '<div id="mrtv-lib-body"><div class="mrtv-col" id="mrtv-groups"></div><div class="mrtv-col" id="mrtv-tracks"></div></div>' +
-    '<div class="mrtv-foot">▲▼ 选择　◀▶ 切换分类和歌曲　OK 播放　返回 关闭</div></div>' +
+    '<div class="mrtv-foot">▲▼ 选择　◀▶ 切换分类和歌曲　OK 播放　菜单 设置　返回 关闭</div></div>' +
     '<div class="mrtv-panel" id="mrtv-settings"><h2>设置</h2><div id="mrtv-settings-list"></div>' +
     '<div class="mrtv-foot">▲▼ 选择　◀▶ 或 OK 更改　返回 关闭</div></div>';
   document.body.appendChild(root);
   function $(id) { return document.getElementById(id); }
+
+  // Opening title: stays until the first song is on stage (or the empty state is up), 2.6 s at least.
+  var titleShownAt = Date.now();
+  (function buildTitle() {
+    var node = el('div', { id: 'mrtv-title' });
+    var word = el('div', { id: 'mrtv-title-word' });
+    'Mineradio'.split('').forEach(function (ch, i) {
+      var span = el('span'); span.textContent = ch; span.style.animationDelay = (i * 0.09) + 's'; word.appendChild(span);
+    });
+    'TV'.split('').forEach(function (ch, i) {
+      var span = el('span', { 'class': i === 0 ? 'tv' : '' }); span.textContent = ch; span.style.animationDelay = ((9 + i) * 0.09 + 0.15) + 's';
+      if (i > 0) span.style.backgroundImage = 'linear-gradient(110deg, #7fe3b0 0%, #7fe3b0 40%, #ffffff 50%, #b9a4ff 60%, #b9a4ff 100%)', span.style.fontWeight = '300';
+      word.appendChild(span);
+    });
+    node.appendChild(word);
+    node.appendChild(el('div', { id: 'mrtv-title-sub' }, 'PRIVATE VISUAL RADIO'));
+    root.appendChild(node);
+    setTimeout(function () { word.classList.add('shine'); }, 1900);
+  })();
+  function dismissTitle() {
+    var node = $('mrtv-title');
+    if (!node || node.dataset.leaving) return;
+    node.dataset.leaving = '1';
+    setTimeout(function () {
+      node.classList.add('leave');
+      setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 1000);
+    }, Math.max(0, 2600 - (Date.now() - titleShownAt)));
+  }
 
   function toast(text, ms) {
     var node = $('mrtv-toast');
@@ -108,6 +136,7 @@
     folderOrder.forEach(function (name) { out.push({ title: name, note: '文件夹', indexes: byFolder[name] }); });
     albumOrder.sort(cmp).forEach(function (name) { out.push({ title: name, note: '专辑', indexes: byAlbum[name] }); });
     artistOrder.sort(cmp).forEach(function (name) { out.push({ title: name, note: '艺人', indexes: byArtist[name] }); });
+    out.push({ title: '设置…', note: '', indexes: [], settings: true });
     groups = out;
   }
   function setLibrary(payload) {
@@ -125,12 +154,13 @@
   function loadLibrary(reason) {
     return api('/tvapi/library').then(function (payload) {
       var changed = setLibrary(payload || {});
-      if (!songs.length) { showEmpty(); return; }
+      if (!songs.length) { showEmpty(); if (!libraryInfo.scanning) dismissTitle(); return; }
       hideEmpty();
+      dismissTitle();
       if (!started) { started = true; startPlayback(); }
       else if (changed && mode === 'library') renderLibrary();
       if (changed && reason === 'mount') toast('已发现 ' + songs.length + ' 首歌曲');
-    }).catch(function () { if (!songs.length) showEmpty(); });
+    }).catch(function () { if (!songs.length) { showEmpty(); dismissTitle(); } });
   }
   TV.onLibraryChanged = function () { loadLibrary('mount'); };
 
@@ -256,7 +286,7 @@
     lib.trackTop = windowTop(lib.trackTop, lib.track, g.indexes.length);
     var gHtml = '';
     for (var i = lib.groupTop; i < Math.min(groups.length, lib.groupTop + ROWS); i++) {
-      gHtml += '<div class="mrtv-row' + (i === lib.group ? ' sel' : '') + '"><span class="mrtv-main">' + esc(groups[i].title) + '</span><span class="mrtv-side">' + esc(groups[i].note ? groups[i].note + ' · ' : '') + groups[i].indexes.length + '</span></div>';
+      gHtml += '<div class="mrtv-row' + (i === lib.group ? ' sel' : '') + '"><span class="mrtv-main">' + esc(groups[i].title) + '</span><span class="mrtv-side">' + esc(groups[i].note ? groups[i].note + ' · ' : '') + (groups[i].settings ? '' : groups[i].indexes.length) + '</span></div>';
     }
     var tHtml = '';
     for (var j = lib.trackTop; j < Math.min(g.indexes.length, lib.trackTop + ROWS); j++) {
@@ -296,9 +326,11 @@
         lib.track = Math.max(0, Math.min(g.indexes.length - 1, lib.track + d));
       }
     } else if (key === 'ok') {
+      if (g.settings) { $('mrtv-library').classList.remove('show'); openSettings(); return; }
       if (lib.col === 0) lib.col = 1;
-      else { playList(g.indexes, lib.track, 0); closePanels(); return; }
-    }
+      else if (g.indexes.length) { playList(g.indexes, lib.track, 0); closePanels(); return; }
+    } else if (key === 'menu') { $('mrtv-library').classList.remove('show'); openSettings(); return; }
+    if ((groups[lib.group] || {}).settings) lib.col = 0;
     renderLibrary();
   }
 
@@ -309,13 +341,29 @@
   function presetName(i) {
     var card = document.querySelector('#preset-grid .preset-card[data-preset="' + i + '"]');
     var nameEl = card && card.querySelector('.pc-name');
-    return ((nameEl && nameEl.textContent) || '').trim().slice(0, 16) || ('视觉 ' + (i + 1));
+    return ((nameEl && nameEl.textContent) || '').trim().slice(0, 30) || ('视觉 ' + (i + 1));
+  }
+  /** The visuals in the order Mineradio lists them. */
+  function presetOrder() {
+    return Array.prototype.map.call(document.querySelectorAll('#preset-grid .preset-card'), function (c) { return Number(c.getAttribute('data-preset')); }).filter(isFinite);
+  }
+  var visualBusyUntil = 0;
+  function cycleVisual(dir) {
+    var order = presetOrder();
+    if (!order.length || !has('setPreset')) return;
+    var now = Date.now();
+    if (now < visualBusyUntil) return; // one particle transition at a time
+    visualBusyUntil = now + 700;
+    var at = order.indexOf(currentPreset());
+    var next = order[((at < 0 ? 0 : at) + dir + order.length) % order.length];
+    try { setPreset(next); } catch (e) { console.warn('[MRTV] preset', e); return; }
+    toast(presetName(next) + '　' + (order.indexOf(next) + 1) + ' / ' + order.length, 1800);
   }
   function currentPreset() { return (typeof fx !== 'undefined' && fx && isFinite(fx.preset)) ? Number(fx.preset) : 0; }
   var settings = [
     { title: '播放顺序', value: playModeText, change: function () { if (has('cyclePlayMode')) cyclePlayMode(); } },
-    { title: '视觉效果', value: function () { return presetCount() ? presetName(currentPreset()) + '（' + (currentPreset() + 1) + ' / ' + presetCount() + '）' : '默认'; },
-      change: function (d) { var n = presetCount(); if (n && has('setPreset')) setPreset((currentPreset() + (d || 1) + n) % n); } },
+    { title: '视觉效果', value: function () { return presetCount() ? presetName(currentPreset()) + '（' + (presetOrder().indexOf(currentPreset()) + 1) + ' / ' + presetCount() + '）' : '默认'; },
+      change: function (d) { cycleVisual(d || 1); } },
     { title: '歌词', value: function () { return (typeof fx !== 'undefined' && fx && fx.particleLyrics) ? '显示' : '隐藏'; },
       change: function () { if (has('setParticleLyricsSilently')) setParticleLyricsSilently(!(fx && fx.particleLyrics)); } },
     { title: '画面精细度', value: function () { var q = (typeof fx !== 'undefined' && fx && fx.performanceQuality) || 'eco'; return QUALITY_TEXT[q] || q; },
@@ -384,20 +432,23 @@
       if (key === 'ok') {
         if (libraryInfo.access === 'none' && native && native.requestAccess) native.requestAccess();
         else api('/tvapi/rescan').then(function () { setTimeout(function () { loadLibrary('mount'); }, 1200); }).catch(function () { });
-      } else if (key === 'down' || key === 'menu') openSettings();
+      } else if (key === 'menu' || key === 'down') openSettings();
       return;
     }
-    // Stage
-    if (key === 'ok') playPause();
-    else if (key === 'up') openLibrary();
-    else if (key === 'down' || key === 'menu') openSettings();
+    // Stage: up / down change the visual, left / right the song; OK is answered on release
+    // (keyUp), since holding it opens the library.
+    if (key === 'ok') { if (repeat) { held.repeats++; if (held.repeats === 3) { held.consumed = true; openLibrary(); } } }
+    else if (key === 'up') { if (!repeat) cycleVisual(-1); }
+    else if (key === 'down') { if (!repeat) cycleVisual(1); }
+    else if (key === 'menu') openSettings();
     else if (key === 'left' || key === 'right') {
       if (repeat) { held.repeats++; if (held.repeats >= 2) seekBy(key === 'left' ? -10 : 10); }
     }
   }
   function keyDown(key, repeat) {
-    if (!repeat) { held.key = key; held.repeats = 0; held.mode = mode; }
-    if (repeat && (key === 'ok' || key === 'back' || key === 'playpause' || key === 'menu' || key === 'next' || key === 'prev')) return;
+    if (!repeat) { held.key = key; held.repeats = 0; held.mode = mode; held.consumed = false; }
+    if (repeat && (key === 'back' || key === 'playpause' || key === 'menu' || key === 'next' || key === 'prev')) return;
+    if (repeat && key === 'ok' && mode !== 'stage') return;
     handle(key, repeat);
   }
   function keyUp(key) {
@@ -405,6 +456,7 @@
     if (mode === 'stage' && held.mode === 'stage' && (key === 'left' || key === 'right') && held.key === key && held.repeats < 2) {
       if (key === 'left') { if (has('prevTrack')) prevTrack(); } else if (has('nextTrack')) nextTrack();
     }
+    if (key === 'ok' && mode === 'stage' && held.mode === 'stage' && held.key === 'ok' && !held.consumed) playPause();
     held.key = ''; held.repeats = 0;
   }
   /** The TV shell hands remote keys over by name: 'down' with its repeat count, then 'up'. */
