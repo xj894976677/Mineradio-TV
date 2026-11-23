@@ -11,7 +11,7 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.4.0' };
+  var TV = window.MRTV = { version: '0.5.0' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';
@@ -68,7 +68,7 @@
     '<div class="mrtv-foot" id="mrtv-lib-foot"></div></div>' +
     '<div class="mrtv-panel" id="mrtv-login"><h2>登录网易云音乐</h2><div id="mrtv-login-body"><img id="mrtv-login-qr" alt="">' +
     '<div id="mrtv-login-text"><div id="mrtv-login-status"></div><p>登录信息只保存在这台电视上。</p><p>OK 换一个二维码　返回 取消</p></div></div></div>' +
-    '<div class="mrtv-panel" id="mrtv-settings"><h2>设置</h2><div id="mrtv-settings-list"></div>' +
+    '<div class="mrtv-panel" id="mrtv-settings"><h2>设置<small id="mrtv-settings-more"></small></h2><div id="mrtv-settings-list"></div>' +
     '<div class="mrtv-foot">▲▼ 选择　◀▶ 更改选项　OK 确定　返回 上一级</div></div>';
   document.body.appendChild(root);
   function $(id) { return document.getElementById(id); }
@@ -640,6 +640,36 @@
     toast(presetName(next) + '　' + (order.indexOf(next) + 1) + ' / ' + order.length, 1800);
   }
   function currentPreset() { return (typeof fx !== 'undefined' && fx && isFinite(fx.preset)) ? Number(fx.preset) : 0; }
+  // Audio quality, a service at a time, from Mineradio's own lists (highest first). The service
+  // gives what the account may have; Mineradio steps down by itself when a song has less.
+  function qualityRow(title, provider) {
+    function options() { return (typeof PLAYBACK_QUALITY_OPTIONS !== 'undefined' && PLAYBACK_QUALITY_OPTIONS[provider]) || []; }
+    function current() { return has('getProviderPlaybackQuality') ? getProviderPlaybackQuality(provider) : ''; }
+    return {
+      title: title,
+      value: function () {
+        var list = options(), key = current();
+        var hit = list.filter(function (o) { return o.key === key; })[0];
+        return hit ? hit.title + (hit.sub ? '（' + String(hit.sub).split(' / ')[0] + '）' : '') : (key || '默认');
+      },
+      change: function (d) {
+        var list = options();
+        if (!list.length || !has('setProviderPlaybackQuality')) return;
+        var at = Math.max(0, list.map(function (o) { return o.key; }).indexOf(current()));
+        // Right is higher: the lists run from the best down.
+        var next = list[Math.max(0, Math.min(list.length - 1, at - (d || 1)))];
+        if (!next || next.key === current()) return;
+        if (provider === 'netease' && next.svip && has('hasProviderSvip') && !hasProviderSvip('netease', loginStatus)) { toast('超清母带需要网易云 SVIP'); return; }
+        setProviderPlaybackQuality(provider, next.key);
+        try { if (has('updatePlaybackQualityUi')) updatePlaybackQualityUi(); } catch (e) { }
+        // The song that is playing changes over if it is this service's; the rest follow as they start.
+        try {
+          var song = currentSong();
+          if (song && !song.localKey && has('currentPlaybackQualityProvider') && currentPlaybackQualityProvider() === provider && has('applyPlaybackQualityToCurrentTrack')) applyPlaybackQualityToCurrentTrack(next.key, provider);
+        } catch (e) { }
+      }
+    };
+  }
   var settings = [
     { title: '播放顺序', value: playModeText, change: function () { if (has('cyclePlayMode')) cyclePlayMode(); } },
     { title: '视觉效果', value: function () { return presetCount() ? presetName(currentPreset()) + '（' + (presetOrder().indexOf(currentPreset()) + 1) + ' / ' + presetCount() + '）' : '默认'; },
@@ -650,6 +680,8 @@
       change: function (d) { var q = (fx && fx.performanceQuality) || 'eco'; var i = QUALITY.indexOf(q); i = (Math.max(0, i) + (d || 1) + QUALITY.length) % QUALITY.length; if (has('setPerformanceQualityMode')) setPerformanceQualityMode(QUALITY[i], true); } },
     { title: '节奏分析（镜头随鼓点）', value: function () { return prefs.beat ? '开' : '关'; },
       change: function () { prefs.beat = !prefs.beat; writeJson(PREF_KEY, prefs); } },
+    qualityRow('网易云音质', 'netease'),
+    qualityRow('QQ 音乐音质', 'qq'),
     { title: '网易云账号', action: true, value: function () { return online.state !== 'ready' ? (online.state === 'failed' ? '不可用' : '启动中…') : (online.user ? (online.user.nickname || '已登录') + '　OK 退出登录' : '未登录　OK 登录'); },
       change: function () { if (online.user) confirmThen('netease-out', '再按一次 OK 退出网易云账号', function () { logout('netease'); }); else { $('mrtv-settings').classList.remove('show'); openLogin('settings'); } } },
     { title: 'QQ 音乐账号', action: true, value: function () { return online.state !== 'ready' ? (online.state === 'failed' ? '不可用' : '启动中…') : (online.qq ? (online.qq.nickname || '已登录') + '　OK 退出登录' : '未登录　OK 登录'); },
@@ -667,11 +699,17 @@
     toast(text, 3200);
   }
   var settingsFrom = 'stage';
+  var settingsTop = 0;
   function renderSettings() {
-    $('mrtv-settings-list').innerHTML = settings.map(function (s, i) {
+    settingsTop = windowTop(settingsTop, settingsIdx, settings.length);
+    var html = '';
+    for (var i = settingsTop; i < Math.min(settings.length, settingsTop + ROWS); i++) {
+      var s = settings[i];
       var value = ''; try { value = s.value(); } catch (e) { }
-      return '<div class="mrtv-row' + (i === settingsIdx ? ' sel' : '') + '"><span class="mrtv-main">' + esc(s.title) + '</span><span class="mrtv-side">' + (value ? (s.action ? esc(value) : '‹ ' + esc(value) + ' ›') : '') + '</span></div>';
-    }).join('');
+      html += '<div class="mrtv-row' + (i === settingsIdx ? ' sel' : '') + '"><span class="mrtv-main">' + esc(s.title) + '</span><span class="mrtv-side">' + (value ? (s.action ? esc(value) : '‹ ' + esc(value) + ' ›') : '') + '</span></div>';
+    }
+    $('mrtv-settings-list').innerHTML = html;
+    $('mrtv-settings-more').textContent = settings.length > ROWS ? (settingsIdx + 1) + ' / ' + settings.length + (settingsTop + ROWS < settings.length ? '　▼ 还有更多' : '') : '';
   }
   function openSettings(from) { settingsFrom = from || 'stage'; mode = 'settings'; hideHud(); $('mrtv-empty').classList.remove('show'); renderSettings(); $('mrtv-settings').classList.add('show'); }
   function settingsKey(key) {
