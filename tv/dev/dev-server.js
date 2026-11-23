@@ -149,6 +149,9 @@ http.createServer((req, res) => {
   }
   if (p.startsWith('/api/')) return proxyApi(req, res);
   if (p === '/' || p === '/index.html') return send(res, 200, injectTv(fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8')), MIME['.html']);
+  // As the TV app does: the modules put together (tv/backend/bundle-ui.js), when they have been built.
+  const bundle = path.resolve(__dirname, '../app/build/backendAssets/tv/index-modules.js');
+  if (p === '/js/index-loader.js' && fs.existsSync(bundle) && !process.env.MRTV_NO_BUNDLE) return sendFile(req, res, bundle);
   if (p.startsWith('/tv/')) return sendFile(req, res, path.join(TV_ASSETS, path.normalize(p.slice(4)).replace(/^(\.\.[\/\\])+/, '')));
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
   if (!file.startsWith(PUBLIC)) return send(res, 403, 'forbidden', 'text/plain');

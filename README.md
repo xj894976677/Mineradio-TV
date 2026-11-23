@@ -64,7 +64,7 @@ U 盘建议格式化成 exFAT 或 FAT32。文件夹最多扫描 10 层，名为 
 目前没有发布安装包，需要自己编译（见下），然后用 adb 安装：
 
 ```bash
-adb install -r tv/app/build/outputs/apk/debug/app-debug.apk
+adb install -r tv/app/build/outputs/apk/release/app-release.apk
 ```
 
 读取 U 盘里的歌词和封面图片需要「所有文件访问」权限。第一次打开时应用会引导授权；电视的设置里没有这个页面时，用 adb 授权：
@@ -85,7 +85,7 @@ adb shell appops set tv.mineradio.app MANAGE_EXTERNAL_STORAGE allow
 npm install --omit=dev          # 后端的依赖，会打包进 APK
 cd tv
 echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease   # 约 26 MB，用调试密钥签名
 ```
 
 在线音乐还需要两个不在仓库里的运行库，放进 `tv/app/src/main/jniLibs/arm64-v8a/`：
@@ -112,7 +112,7 @@ node tv/dev/dev-server.js ~/Music
 | `public/` | Mineradio 原版网页界面，未修改 |
 | `tv/app/` | Android TV 应用：全屏 WebView、请求路由（`TvRouter.kt`）、离线曲库（`MusicLibrary.kt`） |
 | `tv/app/src/main/assets/tv/` | TV 操作层：按键、曲库和设置面板、正在播放卡片、开场标题 |
-| `tv/backend/start.js` | 启动原版后端的入口，把不带的模块换成「不可用」 |
+| `tv/backend/` | `start.js` 启动原版后端，把不带的模块换成「不可用」；`pack.js` 挑出后端用得到的文件打包；`bundle-ui.js` 把界面模块合成一个脚本 |
 | `tv/native/` | 启动 Node 的那一个原生函数 |
 | `tv/dev/` | 电脑上用的开发服务器 |
 | `server.js`、`*-api.js`、`cuefield/` 等 | 原版后端，未修改，打包进应用 |

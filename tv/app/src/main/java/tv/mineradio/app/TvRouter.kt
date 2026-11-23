@@ -44,6 +44,8 @@ class TvRouter(private val context: Context, private val onRescan: () -> Unit) {
         private const val BODY_TAG = "<link rel=\"stylesheet\" href=\"tv/tv.css\"><script src=\"tv/tv.js\"></script>"
     }
 
+    private val hasBundle: Boolean by lazy { runCatching { context.assets.open("tv/index-modules.js").close() }.isSuccess }
+
     fun handle(request: WebResourceRequest): WebResourceResponse? {
         val uri = request.url
         if (uri.host != HOST || uri.port != Backend.PORT) return null
@@ -53,6 +55,8 @@ class TvRouter(private val context: Context, private val onRescan: () -> Unit) {
             when {
                 path == "/" || path == "/index.html" -> index()
                 path.startsWith("/tvapi/") -> tvApi(path, uri, request)
+                // The loader would fetch ~110 module files one by one: serve them put together.
+                path == "/js/index-loader.js" && hasBundle -> asset("tv/index-modules.js")
                 else -> asset(path.trimStart('/'))
             }
         } catch (e: Throwable) {

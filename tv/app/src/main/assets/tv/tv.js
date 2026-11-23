@@ -187,12 +187,27 @@
       if (mode === 'empty') showEmpty();
     });
   }
+  /** Mineradio brings back the last online song by itself, paused: a TV goes on playing it. */
+  function resumeOnlineSnapshot() {
+    var song = currentSong();
+    if (started || !song || song.localKey) return;
+    if (typeof audio !== 'undefined' && audio && !audio.paused) return;
+    started = true;
+    hideEmpty();
+    dismissTitle();
+    try { if (has('setImmersiveMode')) setImmersiveMode(true); } catch (e) { }
+    Promise.resolve(playQueueAt(currentIdx, { manual: false, startupAutoplay: true })).catch(function () { started = false; });
+  }
   function watchBackend() {
     api('/tvapi/backend').then(function (r) {
       var state = (r && r.state) || 'failed';
       if (state === online.state) return;
       online.state = state;
-      if (state === 'ready') { refreshOnline(); try { if (has('refreshLoginStatus')) refreshLoginStatus(true); } catch (e) { } }
+      if (state === 'ready') {
+        refreshOnline();
+        try { if (has('refreshLoginStatus')) refreshLoginStatus(true); } catch (e) { }
+        resumeOnlineSnapshot();
+      }
       else { buildOnlineGroups(); buildGroups(); }
     }).catch(function () { }).then(function () {
       if (online.state !== 'ready' && online.state !== 'failed') setTimeout(watchBackend, 1500);

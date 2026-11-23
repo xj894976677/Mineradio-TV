@@ -41,6 +41,8 @@ object Backend {
         state = "preparing"
         thread(name = "mrtv-backend-prepare", isDaemon = true) {
             try {
+                // The stage first: Node's start competes with the page for the TV's few cores.
+                Thread.sleep(2500)
                 val dir = unpack(app)
                 val data = File(app.filesDir, "backend-data").apply { mkdirs() }
                 mapOf(
@@ -63,7 +65,7 @@ object Backend {
                 val script = File(dir, "tv/backend/start.js").absolutePath
                 // V8 wants a deep stack: Node's own main thread has 8 MB.
                 Thread(null, {
-                    val code = runCatching { NodeBridge.startNode(arrayOf("node", script)) }.getOrElse { -1 }
+                    val code = runCatching { NodeBridge.startNode(arrayOf("node", "--max-old-space-size=160", script)) }.getOrElse { -1 }
                     Log.w(TAG, "node ended with $code")
                     state = "failed"; error = "node ended ($code)"
                 }, "mrtv-node", 8L shl 20).start()

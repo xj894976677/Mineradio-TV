@@ -72,6 +72,7 @@ class MainActivity : Activity() {
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
             settings.setSupportZoom(false)
+            if (Build.VERSION.SDK_INT >= 26) setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
             addJavascriptInterface(Bridge(), "MineradioTVNative")
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = router.handle(request)
