@@ -1,0 +1,59 @@
+/* Mineradio-TV: the 10-foot layer over Mineradio's stage. The desktop chrome (search, title bar,
+   mouse-driven control bar, home dashboard) is hidden; the remote drives the panels below. */
+html.mrtv, html.mrtv * { cursor: none !important; }
+html.mrtv #desktop-titlebar, html.mrtv #search-area, html.mrtv #top-right, html.mrtv #fx-fab,
+html.mrtv #fx-panel, html.mrtv #bottom-bar, html.mrtv #empty-home, html.mrtv #hint,
+html.mrtv #visual-guide-btn, html.mrtv #update-entry, html.mrtv #diy-mode-btn,
+html.mrtv #fullscreen-diy-zone, html.mrtv #idle-guide-canvas, html.mrtv #local-beat-modal,
+html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash { display: none !important; }
+
+#mrtv-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; font-family: "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif; color: #fff; }
+#mrtv-root * { box-sizing: border-box; }
+
+/* Now playing: bottom left, shows on a track change or a key press, then leaves. */
+#mrtv-hud { position: absolute; left: 4vw; bottom: 6vh; display: flex; align-items: center; gap: 1.6vw; padding: 1.4vh 1.8vw 1.4vh 1.4vh; max-width: 62vw; border-radius: 2.2vh; background: rgba(12, 12, 16, .62); border: 1px solid rgba(255, 255, 255, .12); opacity: 0; transform: translateY(2vh); transition: opacity .35s ease, transform .35s ease; }
+#mrtv-hud.show { opacity: 1; transform: none; }
+#mrtv-hud-cover { width: 11vh; height: 11vh; border-radius: 1.4vh; background: rgba(255, 255, 255, .08) center/cover no-repeat; flex: none; }
+#mrtv-hud-text { min-width: 0; }
+#mrtv-hud-title { font-size: 3.4vh; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mrtv-hud-sub { margin-top: .5vh; font-size: 2.2vh; color: rgba(255, 255, 255, .68); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mrtv-hud-bar { margin-top: 1.3vh; height: .6vh; width: 36vw; max-width: 100%; border-radius: 1vh; background: rgba(255, 255, 255, .16); overflow: hidden; }
+#mrtv-hud-fill { height: 100%; width: 0; background: #fff; border-radius: 1vh; }
+#mrtv-hud-meta { margin-top: .8vh; font-size: 1.9vh; color: rgba(255, 255, 255, .55); display: flex; gap: 1.4vw; }
+#mrtv-keys { position: absolute; right: 4vw; bottom: 6vh; font-size: 1.9vh; color: rgba(255, 255, 255, .5); opacity: 0; transition: opacity .35s ease; text-align: right; line-height: 1.7; }
+#mrtv-keys.show { opacity: 1; }
+#mrtv-keys b { display: inline-block; min-width: 3.2vh; padding: 0 .8vh; margin: 0 .5vh 0 1.2vh; border-radius: .7vh; background: rgba(255, 255, 255, .16); color: #fff; font-weight: 500; text-align: center; }
+
+#mrtv-toast { position: absolute; left: 50%; top: 7vh; transform: translate(-50%, -2vh); padding: 1.3vh 2.4vw; border-radius: 4vh; background: rgba(12, 12, 16, .78); border: 1px solid rgba(255, 255, 255, .14); font-size: 2.4vh; opacity: 0; transition: opacity .3s ease, transform .3s ease; white-space: nowrap; }
+#mrtv-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Empty state: no storage, or no music on it. */
+#mrtv-empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(ellipse at center, rgba(0, 0, 0, .25), rgba(0, 0, 0, .7)); }
+#mrtv-empty.show { display: flex; }
+#mrtv-empty h1 { font-size: 5vh; font-weight: 600; margin: 0 0 2vh; }
+#mrtv-empty p { font-size: 2.6vh; color: rgba(255, 255, 255, .7); margin: .6vh 0; }
+#mrtv-empty .mrtv-btn { margin-top: 4vh; padding: 1.4vh 3vw; border-radius: 4vh; font-size: 2.6vh; background: #fff; color: #111; }
+
+/* Panels: library (up) and settings (down). */
+.mrtv-panel { position: absolute; inset: 0; display: none; background: rgba(6, 6, 10, .84); padding: 7vh 5vw; }
+.mrtv-panel.show { display: flex; flex-direction: column; }
+.mrtv-panel h2 { margin: 0 0 3vh; font-size: 4.2vh; font-weight: 600; display: flex; align-items: baseline; gap: 1.4vw; }
+.mrtv-panel h2 small { font-size: 2.2vh; font-weight: 400; color: rgba(255, 255, 255, .5); }
+#mrtv-lib-body { flex: 1; min-height: 0; display: flex; gap: 2.4vw; }
+.mrtv-col { display: flex; flex-direction: column; gap: 1vh; min-height: 0; overflow: hidden; }
+#mrtv-groups { width: 27vw; }
+#mrtv-tracks { flex: 1; }
+.mrtv-row { height: 8.4vh; flex: none; display: flex; align-items: center; gap: 1.2vw; padding: 0 1.4vw; border-radius: 1.6vh; font-size: 2.7vh; color: rgba(255, 255, 255, .78); border: .35vh solid transparent; }
+.mrtv-row .mrtv-main { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrtv-row .mrtv-side { flex: none; font-size: 2.1vh; color: rgba(255, 255, 255, .45); max-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrtv-row .mrtv-thumb { width: 6vh; height: 6vh; flex: none; border-radius: .9vh; background: rgba(255, 255, 255, .08) center/cover no-repeat; }
+.mrtv-row.sel { background: rgba(255, 255, 255, .1); color: #fff; }
+.mrtv-row.playing .mrtv-main::before { content: "▶ "; color: #7fe3b0; }
+.mrtv-col.active .mrtv-row.sel { background: #fff; color: #111; border-color: #fff; }
+.mrtv-col.active .mrtv-row.sel .mrtv-side { color: rgba(0, 0, 0, .55); }
+.mrtv-col.active .mrtv-row.sel.playing .mrtv-main::before { color: #0a8f55; }
+.mrtv-foot { margin-top: 2.4vh; font-size: 2vh; color: rgba(255, 255, 255, .45); }
+#mrtv-settings-list { width: 60vw; display: flex; flex-direction: column; gap: 1vh; }
+#mrtv-settings-list .mrtv-row .mrtv-side { font-size: 2.5vh; color: rgba(255, 255, 255, .75); }
+#mrtv-settings-list .mrtv-row.sel { background: #fff; color: #111; }
+#mrtv-settings-list .mrtv-row.sel .mrtv-side { color: #111; }
