@@ -11,18 +11,18 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.3.0' };
+  var TV = window.MRTV = { version: '0.4.0' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';
-  var ROWS = 8;
+  var ROWS = 7;
 
   var tracks = [];          // as /tvapi/library gives them
   var songs = [];           // Mineradio song objects, same order
   var groups = [];          // [{ title, note, indexes: [song index] }]
   var libraryInfo = { access: 'none', scanning: false, volumes: [] };
   var mode = 'stage';       // stage | library | settings | empty
-  var lib = { col: 1, group: 0, groupTop: 0, track: 0, trackTop: 0 };
+  var lib = { level: 'cards', sec: 0, pos: {}, group: 0, track: 0, trackTop: 0 };
   var settingsIdx = 0;
   var started = false;
   var lastTrackKey = '';
@@ -64,8 +64,8 @@
     '<div id="mrtv-toast"></div>' +
     '<div id="mrtv-empty"><h1 id="mrtv-empty-title"></h1><p id="mrtv-empty-line1"></p><p id="mrtv-empty-line2"></p><div class="mrtv-btn" id="mrtv-empty-btn"></div></div>' +
     '<div class="mrtv-panel" id="mrtv-library"><h2>曲库<small id="mrtv-lib-note"></small></h2>' +
-    '<div id="mrtv-lib-body"><div class="mrtv-col" id="mrtv-groups"></div><div class="mrtv-col" id="mrtv-tracks"></div></div>' +
-    '<div class="mrtv-foot">▲▼ 选择　◀▶ 切换分类和歌曲　OK 播放　菜单 设置　返回 上一级</div></div>' +
+    '<div id="mrtv-lib-body"><div id="mrtv-cards"></div><div id="mrtv-open"><div id="mrtv-open-side"><div id="mrtv-open-cover"></div><div id="mrtv-open-title"></div><div id="mrtv-open-note"></div></div><div class="mrtv-col active" id="mrtv-tracks"></div></div></div>' +
+    '<div class="mrtv-foot" id="mrtv-lib-foot"></div></div>' +
     '<div class="mrtv-panel" id="mrtv-login"><h2>登录网易云音乐</h2><div id="mrtv-login-body"><img id="mrtv-login-qr" alt="">' +
     '<div id="mrtv-login-text"><div id="mrtv-login-status"></div><p>登录信息只保存在这台电视上。</p><p>OK 换一个二维码　返回 取消</p></div></div></div>' +
     '<div class="mrtv-panel" id="mrtv-settings"><h2>设置</h2><div id="mrtv-settings-list"></div>' +
@@ -140,29 +140,25 @@
     song.mrtvSeconds = (Number(raw.duration) || 0) / 1000;
     return song;
   }
+  function playlistCover(pl) { return pl ? (pl.cover || pl.coverImgUrl || pl.picUrl || pl.logo || pl.imgurl || '') : ''; }
   function buildOnlineGroups() {
     var out = [];
     if (online.state !== 'ready') { online.groups = out; return; }
     if (online.user) {
-      out.push({ title: '每日推荐', note: '网易云', online: { kind: 'daily' }, items: online.daily });
+      out.push({ section: '网易云音乐', title: '每日推荐', note: '每天更新', online: { kind: 'daily' }, items: online.daily });
       (online.playlists || []).forEach(function (pl) {
-        out.push({ title: pl.name || '歌单', note: '网易云歌单' + (pl.trackCount ? ' · ' + pl.trackCount : ''), online: { kind: 'playlist', id: pl.id }, items: null });
+        out.push({ section: '网易云音乐', title: pl.name || '歌单', note: pl.trackCount ? pl.trackCount + ' 首' : '歌单', cover: playlistCover(pl), online: { kind: 'playlist', id: pl.id }, items: null });
       });
       (online.recommended || []).forEach(function (pl) {
-        out.push({ title: pl.name || '歌单', note: '网易云推荐', online: { kind: 'playlist', id: pl.id }, items: null });
+        out.push({ section: '为你推荐', title: pl.name || '歌单', note: '网易云推荐', cover: playlistCover(pl), online: { kind: 'playlist', id: pl.id }, items: null });
       });
-    } else {
-      out.push({ title: '登录网易云音乐', note: '扫码', login: true, items: [] });
     }
     if (online.qq) {
       (online.qqPlaylists || []).forEach(function (pl) {
-        out.push({ title: pl.name || '歌单', note: 'QQ 音乐歌单' + (pl.trackCount ? ' · ' + pl.trackCount : ''), online: { kind: 'qqplaylist', id: pl.id || pl.disstid || pl.tid }, items: null });
+        out.push({ section: 'QQ 音乐', title: pl.name || '歌单', note: pl.trackCount ? pl.trackCount + ' 首' : '歌单', cover: playlistCover(pl), online: { kind: 'qqplaylist', id: pl.id || pl.disstid || pl.tid }, items: null });
       });
-      if (!(online.qqPlaylists || []).length) out.push({ title: 'QQ 音乐：没有歌单', note: '', items: [] });
-    } else {
-      out.push({ title: '登录 QQ 音乐', note: '扫码', qqLogin: true, items: [] });
     }
-    NETEASE_CHARTS.forEach(function (c) { out.push({ title: c[0], note: '网易云榜单', online: { kind: 'playlist', id: c[1] }, items: null }); });
+    NETEASE_CHARTS.forEach(function (c) { out.push({ section: '榜单', title: c[0], note: '网易云', online: { kind: 'playlist', id: c[1] }, items: null }); });
     // Keep what was already loaded when the list is rebuilt.
     out.forEach(function (g) {
       if (!g.online || g.items) return;
@@ -247,11 +243,12 @@
     });
   }
 
+  var SECTION_ORDER = ['本地音乐', '网易云音乐', 'QQ 音乐', '为你推荐', '榜单', '专辑', '艺人', '更多'];
+  var sections = [];
   function buildGroups() {
     var all = songs.map(function (_, i) { return i; });
     var out = [];
-    if (songs.length) out.push({ title: '全部歌曲', note: '本地', indexes: all });
-    online.groups.forEach(function (g) { out.push(g); });
+    if (songs.length) out.push({ section: '本地音乐', title: '全部歌曲', note: songs.length + ' 首', indexes: all });
     var byFolder = {}, folderOrder = [];
     var byAlbum = {}, albumOrder = [];
     var byArtist = {}, artistOrder = [];
@@ -263,12 +260,26 @@
       if (t.artist) { if (!byArtist[t.artist]) { byArtist[t.artist] = []; artistOrder.push(t.artist); } byArtist[t.artist].push(i); }
     });
     var cmp = function (a, b) { return a.localeCompare(b, 'zh-CN', { numeric: true }); };
-    folderOrder.forEach(function (name) { out.push({ title: name, note: '文件夹', indexes: byFolder[name] }); });
-    albumOrder.sort(cmp).forEach(function (name) { out.push({ title: name, note: '专辑', indexes: byAlbum[name] }); });
-    artistOrder.sort(cmp).forEach(function (name) { out.push({ title: name, note: '艺人', indexes: byArtist[name] }); });
-    out.push({ title: '设置…', note: '', indexes: [], settings: true });
+    folderOrder.forEach(function (name) { out.push({ section: '本地音乐', title: name.split(' / ').pop(), note: '文件夹 · ' + byFolder[name].length + ' 首', indexes: byFolder[name] }); });
+    albumOrder.sort(cmp).forEach(function (name) { out.push({ section: '专辑', title: name, note: byAlbum[name].length + ' 首', indexes: byAlbum[name] }); });
+    artistOrder.sort(cmp).forEach(function (name) { out.push({ section: '艺人', title: name, note: byArtist[name].length + ' 首', indexes: byArtist[name] }); });
+    online.groups.forEach(function (g) { out.push(g); });
+    out.push({ section: '更多', title: '设置', note: '账号、播放、画面', settings: true, items: [] });
+    var opened = groups[lib.group];
     groups = out;
-    lib.group = Math.max(0, Math.min(lib.group, groups.length - 1));
+    var bySection = {};
+    groups.forEach(function (g, i) { g.index = i; (bySection[g.section] = bySection[g.section] || []).push(g); });
+    sections = SECTION_ORDER.filter(function (name) { return bySection[name]; }).map(function (name) { return { title: name, groups: bySection[name] }; });
+    lib.sec = Math.max(0, Math.min(lib.sec, sections.length - 1));
+    // The group that was open keeps its place if it is still there.
+    var again = opened ? groups.filter(function (g) { return g.title === opened.title && g.section === opened.section; })[0] : null;
+    if (again) lib.group = again.index; else { lib.group = 0; if (lib.level === 'tracks') lib.level = 'cards'; }
+  }
+  function groupCover(g) {
+    if (g.cover) return thumbUrl({ cover: g.cover }, 300);
+    var items = g.items || (g.indexes ? g.indexes.slice(0, 12).map(function (i) { return songs[i]; }) : []);
+    for (var i = 0; i < Math.min(items.length, 12); i++) if (items[i] && items[i].cover) return thumbUrl(items[i], 300);
+    return '';
   }
   function setLibrary(payload) {
     libraryInfo = { access: payload.access || 'none', scanning: !!payload.scanning, volumes: payload.volumes || [] };
@@ -278,7 +289,6 @@
     tracks = next;
     songs = tracks.map(toSong);
     buildGroups();
-    lib.track = 0; lib.trackTop = 0;
     return true;
   }
   function loadLibrary(reason) {
@@ -301,7 +311,7 @@
     $('mrtv-empty-line2').textContent = noAccess ? '' : '支持 MP3、FLAC、M4A、WAV、OGG；同名的 .lrc 是歌词，文件夹里的 cover.jpg 是封面。';
     $('mrtv-empty-btn').textContent = noAccess ? '按 OK 去授权' : '按 OK 重新扫描';
     if (online.state === 'ready' && !noAccess) {
-      $('mrtv-empty-line2').textContent = '也可以听在线音乐：网易云的榜单，登录后还有每日推荐和你的歌单。';
+      $('mrtv-empty-line2').textContent = '也可以听在线音乐：网易云的榜单；在设置里登录后还有每日推荐和你的歌单。';
       $('mrtv-empty-btn').textContent = '按 OK 打开在线音乐';
     }
     if (currentSong()) { hideEmpty(); return; }
@@ -417,38 +427,63 @@
     if (idx >= top + ROWS) top = idx - ROWS + 1;
     return Math.max(0, Math.min(top, Math.max(0, count - ROWS)));
   }
-  function renderLibrary() {
-    var g = groups[lib.group] || groups[0];
+  var CARDS = 6;
+  function secPos(i) { var s = sections[i]; var p = lib.pos[s ? s.title : ''] || 0; return s ? Math.max(0, Math.min(p, s.groups.length - 1)) : 0; }
+  function focusedGroup() { var s = sections[lib.sec]; return s ? s.groups[secPos(lib.sec)] : null; }
+  function cardHtml(g, focused) {
+    var art = groupCover(g);
+    var face = art ? ' style="background-image:url(\'' + art + '\')"' : '';
+    var glyph = art ? '' : '<span>' + esc(g.settings ? '⚙' : (g.title || '♪').slice(0, 1)) + '</span>';
+    return '<div class="mrtv-card' + (focused ? ' sel' : '') + (g.settings ? ' plain' : '') + '"><div class="mrtv-card-art"' + face + '>' + glyph + '</div><div class="mrtv-card-title">' + esc(g.title) + '</div><div class="mrtv-card-note">' + esc(g.note || '') + '</div></div>';
+  }
+  function renderCards() {
+    // Three rows on screen: the focused section and its neighbours; each row shows a window of
+    // cards around its own position, so a drive with a thousand albums stays light.
+    var first = Math.max(0, Math.min(lib.sec - 1, sections.length - 3));
+    var html = '';
+    for (var i = first; i < Math.min(sections.length, first + 3); i++) {
+      var s = sections[i], at = secPos(i);
+      var start = Math.max(0, Math.min(at - 2, s.groups.length - CARDS));
+      var row = '';
+      for (var j = start; j < Math.min(s.groups.length, start + CARDS); j++) row += cardHtml(s.groups[j], i === lib.sec && j === at);
+      html += '<div class="mrtv-sec' + (i === lib.sec ? ' active' : '') + '"><div class="mrtv-sec-title">' + esc(s.title) + '<small>' + (s.groups.length > 1 ? (at + 1) + ' / ' + s.groups.length : '') + '</small></div><div class="mrtv-sec-row">' + row + '</div></div>';
+    }
+    $('mrtv-cards').innerHTML = html;
+  }
+  function renderTracks() {
+    var g = groups[lib.group] || {};
     var items = groupItems(g);
     var playingKey = songKey(currentSong());
-    lib.groupTop = windowTop(lib.groupTop, lib.group, groups.length);
     lib.track = Math.max(0, Math.min(lib.track, Math.max(0, items.length - 1)));
     lib.trackTop = windowTop(lib.trackTop, lib.track, items.length);
-    var gHtml = '';
-    for (var i = lib.groupTop; i < Math.min(groups.length, lib.groupTop + ROWS); i++) {
-      var gi = groups[i];
-      var count = gi.settings || gi.login || gi.qqLogin ? '' : (gi.indexes ? gi.indexes.length : (gi.items ? gi.items.length : ''));
-      gHtml += '<div class="mrtv-row' + (i === lib.group ? ' sel' : '') + '"><span class="mrtv-main">' + esc(gi.title) + '</span><span class="mrtv-side">' + esc([gi.note, count].filter(function (v) { return v !== '' && v != null; }).join(' · ')) + '</span></div>';
-    }
-    var tHtml = '';
-    if (g.login) tHtml = '<div class="mrtv-note">按 OK，用手机上的网易云音乐 App 扫码登录。<br>登录后这里会出现每日推荐和你的歌单。</div>';
-    else if (g.qqLogin) tHtml = '<div class="mrtv-note">按 OK，用手机 QQ 扫码登录 QQ 音乐。<br>登录后这里会出现你的 QQ 音乐歌单。</div>';
-    else if (g.online && !g.items) { tHtml = '<div class="mrtv-note">' + (g.failed ? '没有加载出来，按 OK 再试一次。' : '正在加载…') + '</div>'; if (!g.failed) loadOnlineGroup(g); }
-    else if (g.settings) tHtml = '<div class="mrtv-note">按 OK 打开设置。</div>';
+    var art = groupCover(g);
+    $('mrtv-open-cover').style.backgroundImage = art ? 'url("' + art + '")' : '';
+    $('mrtv-open-title').textContent = g.title || '';
+    $('mrtv-open-note').textContent = [g.section, items.length ? items.length + ' 首' : ''].filter(Boolean).join(' · ');
+    var html = '';
+    if (g.online && !g.items) { html = '<div class="mrtv-note">' + (g.failed ? '没有加载出来，按 OK 再试一次。' : '正在加载…') + '</div>'; if (!g.failed) loadOnlineGroup(g); }
+    else if (!items.length) html = '<div class="mrtv-note">这里还没有歌曲。</div>';
     for (var j = lib.trackTop; j < Math.min(items.length, lib.trackTop + ROWS); j++) {
       var t = items[j];
-      var art = thumbUrl(t, 100);
-      var thumb = art ? ' style="background-image:url(\'' + art + '\')"' : '';
+      var thumbArt = thumbUrl(t, 100);
+      var thumb = thumbArt ? ' style="background-image:url(\'' + thumbArt + '\')"' : '';
       var seconds = t.mrtvSeconds || (t.localKey ? t.duration : 0);
-      tHtml += '<div class="mrtv-row' + (j === lib.track ? ' sel' : '') + (songKey(t) === playingKey ? ' playing' : '') + '"><span class="mrtv-thumb"' + thumb + '></span><span class="mrtv-main">' + esc(t.name) + '</span><span class="mrtv-side">' + esc([t.artist, seconds ? fmtTime(seconds) : ''].filter(Boolean).join(' · ')) + '</span></div>';
+      html += '<div class="mrtv-row' + (j === lib.track ? ' sel' : '') + (songKey(t) === playingKey ? ' playing' : '') + '"><span class="mrtv-thumb"' + thumb + '></span><span class="mrtv-main">' + esc(t.name) + '</span><span class="mrtv-side">' + esc([t.artist, seconds ? fmtTime(seconds) : ''].filter(Boolean).join(' · ')) + '</span></div>';
     }
-    $('mrtv-groups').innerHTML = gHtml;
-    $('mrtv-tracks').innerHTML = tHtml;
-    $('mrtv-groups').classList.toggle('active', lib.col === 0);
-    $('mrtv-tracks').classList.toggle('active', lib.col === 1);
-    var note = songs.length ? '本地 ' + songs.length + ' 首' + (libraryInfo.volumes.length ? ' · ' + libraryInfo.volumes.join('、') : '') : '没有本地音乐';
+    $('mrtv-tracks').innerHTML = html;
+  }
+  function renderLibrary() {
+    var tracksLevel = lib.level === 'tracks';
+    $('mrtv-cards').style.display = tracksLevel ? 'none' : '';
+    $('mrtv-open').style.display = tracksLevel ? '' : 'none';
+    if (tracksLevel) renderTracks(); else renderCards();
+    $('mrtv-lib-foot').textContent = tracksLevel ? '▲▼ 选择　OK 播放　返回 回到曲库' : '◀▶ ▲▼ 选择　OK 打开　菜单 设置　返回 关闭';
+    var note = songs.length ? '本地 ' + songs.length + ' 首' : '没有本地音乐';
     if (libraryInfo.scanning) note += ' · 正在读取信息…';
-    note += online.state === 'ready' ? (' · 网易云' + (online.user ? '已登录' : '未登录') + ' · QQ 音乐' + (online.qq ? '已登录' : '未登录')) : online.state === 'failed' ? ' · 在线音乐不可用' : ' · 在线音乐启动中…';
+    if (online.state === 'ready') {
+      var who = [online.user ? '网易云' : '', online.qq ? 'QQ 音乐' : ''].filter(Boolean);
+      note += who.length ? ' · 已登录 ' + who.join('、') : ' · 在设置里登录网易云或 QQ 音乐，可以听自己的歌单';
+    } else note += online.state === 'failed' ? ' · 在线音乐不可用' : ' · 在线音乐启动中…';
     $('mrtv-lib-note').textContent = note;
   }
   function openLibrary(keep) {
@@ -456,37 +491,53 @@
     mode = 'library';
     hideHud();
     $('mrtv-empty').classList.remove('show');
-    var items = groupItems(groups[lib.group] || groups[0]);
     if (!keep) {
+      // Open on what is playing: its group's card, or its place in the list if that is open.
+      lib.level = 'cards';
       var key = songKey(currentSong());
-      if (key) for (var j = 0; j < items.length; j++) if (songKey(items[j]) === key) { lib.track = j; break; }
-      lib.col = items.length ? 1 : 0;
+      if (key) {
+        for (var i = 0; i < sections.length; i++) {
+          var hit = -1;
+          sections[i].groups.forEach(function (g, j) { if (hit < 0 && !g.indexes && g.items && g.items.some(function (t) { return songKey(t) === key; })) hit = j; });
+          if (hit >= 0) { lib.sec = i; lib.pos[sections[i].title] = hit; break; }
+        }
+      }
     }
     renderLibrary();
     $('mrtv-library').classList.add('show');
   }
-  function libraryKey(key) {
-    var g = groups[lib.group] || groups[0];
+  function openGroup(g) {
+    lib.group = g.index; lib.level = 'tracks'; lib.track = 0; lib.trackTop = 0;
+    var key = songKey(currentSong());
     var items = groupItems(g);
-    if (key === 'left') { if (lib.col === 1) lib.col = 0; }
-    else if (key === 'right') { if (lib.col === 0 && items.length) lib.col = 1; }
-    else if (key === 'up' || key === 'down') {
-      var d = key === 'up' ? -1 : 1;
-      if (lib.col === 0) {
-        var ng = Math.max(0, Math.min(groups.length - 1, lib.group + d));
-        if (ng !== lib.group) { lib.group = ng; lib.track = 0; lib.trackTop = 0; }
-      } else {
-        lib.track = Math.max(0, Math.min(items.length - 1, lib.track + d));
+    if (key) for (var j = 0; j < items.length; j++) if (songKey(items[j]) === key) { lib.track = j; break; }
+    renderLibrary();
+  }
+  function libraryKey(key) {
+    if (key === 'menu') { $('mrtv-library').classList.remove('show'); openSettings('library'); return; }
+    if (lib.level === 'tracks') {
+      var g = groups[lib.group] || {};
+      var items = groupItems(g);
+      if (key === 'up' || key === 'down') lib.track = Math.max(0, Math.min(items.length - 1, lib.track + (key === 'up' ? -1 : 1)));
+      else if (key === 'left') lib.level = 'cards';
+      else if (key === 'ok') {
+        if (g.online && !g.items) { g.failed = false; loadOnlineGroup(g); }
+        else if (items.length) { playSongs(items, lib.track, 0); closePanels(); return; }
       }
-    } else if (key === 'ok') {
-      if (g.settings) { $('mrtv-library').classList.remove('show'); openSettings('library'); return; }
-      if (g.login) { $('mrtv-library').classList.remove('show'); openLogin('library'); return; }
-      if (g.qqLogin) { openQqLogin(); return; }
-      if (g.online && !g.items) { g.failed = false; loadOnlineGroup(g); }
-      else if (lib.col === 0) { if (items.length) lib.col = 1; }
-      else if (items.length) { playSongs(items, lib.track, 0); closePanels(); return; }
-    } else if (key === 'menu') { $('mrtv-library').classList.remove('show'); openSettings('library'); return; }
-    if (!groupItems(groups[lib.group] || {}).length) lib.col = 0;
+      renderLibrary();
+      return;
+    }
+    var s = sections[lib.sec];
+    if (!s) return;
+    if (key === 'left' || key === 'right') lib.pos[s.title] = Math.max(0, Math.min(s.groups.length - 1, secPos(lib.sec) + (key === 'left' ? -1 : 1)));
+    else if (key === 'up' || key === 'down') lib.sec = Math.max(0, Math.min(sections.length - 1, lib.sec + (key === 'up' ? -1 : 1)));
+    else if (key === 'ok') {
+      var card = focusedGroup();
+      if (!card) return;
+      if (card.settings) { $('mrtv-library').classList.remove('show'); openSettings('library'); return; }
+      openGroup(card);
+      return;
+    }
     renderLibrary();
   }
 
@@ -524,7 +575,8 @@
           refreshOnline().then(function () {
             $('mrtv-login').classList.remove('show');
             toast('欢迎 ' + ((online.user && online.user.nickname) || ''));
-            lib.group = Math.max(0, groups.indexOf(online.groups[0])); lib.track = 0; lib.trackTop = 0; lib.col = 0;
+            lib.level = 'cards';
+            sections.forEach(function (sec, i) { if (sec.title === '网易云音乐') { lib.sec = i; lib.pos[sec.title] = 0; } });
             openLibrary(true);
           });
         }, 900);
@@ -669,7 +721,7 @@
       return true;
     }
     if (mode === 'library') {
-      if (lib.col === 1) { lib.col = 0; renderLibrary(); } else closePanels();
+      if (lib.level === 'tracks') { lib.level = 'cards'; renderLibrary(); } else closePanels();
       return true;
     }
     var now = Date.now();

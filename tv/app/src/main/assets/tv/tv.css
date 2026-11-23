@@ -81,3 +81,24 @@ html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash { display: n
 #mrtv-login-status { font-size: 3.6vh; color: #fff; margin-bottom: 3vh; }
 #mrtv-login-status.ok { color: #7fe3b0; }
 #mrtv-login-status.fail { color: #ff9a8f; }
+
+/* Library: a wall of cards by section; a card opens its songs. */
+#mrtv-lib-body { display: block; }
+#mrtv-cards { height: 100%; display: flex; flex-direction: column; gap: 2.2vh; overflow: hidden; }
+.mrtv-sec-title { font-size: 2.5vh; color: rgba(255, 255, 255, .5); margin-bottom: 1.2vh; display: flex; align-items: baseline; gap: 1vw; }
+.mrtv-sec.active .mrtv-sec-title { color: #fff; }
+.mrtv-sec-title small { font-size: 1.8vh; color: rgba(255, 255, 255, .38); }
+.mrtv-sec-row { display: flex; gap: 1.5vw; }
+.mrtv-card { width: 13.6vw; flex: none; padding: .7vh; border-radius: 1.8vh; border: .35vh solid transparent; opacity: .62; transition: transform .16s ease, opacity .16s ease; }
+.mrtv-sec.active .mrtv-card { opacity: .9; }
+.mrtv-card-art { width: 100%; padding-bottom: 100%; position: relative; border-radius: 1.3vh; background: linear-gradient(135deg, #2b2440, #121018) center/cover no-repeat; overflow: hidden; }
+.mrtv-card-art span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 7vh; font-weight: 600; color: rgba(255, 255, 255, .5); }
+.mrtv-card.plain .mrtv-card-art { background: linear-gradient(135deg, #24242c, #101014); }
+.mrtv-card-title { margin-top: 1vh; font-size: 2.2vh; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrtv-card-note { margin-top: .3vh; font-size: 1.7vh; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrtv-card.sel { opacity: 1; border-color: #fff; background: rgba(255, 255, 255, .1); transform: scale(1.04); }
+#mrtv-open { height: 100%; display: flex; gap: 3vw; }
+#mrtv-open-side { width: 24vw; flex: none; }
+#mrtv-open-cover { width: 24vw; height: 24vw; border-radius: 2vh; background: linear-gradient(135deg, #2b2440, #121018) center/cover no-repeat; }
+#mrtv-open-title { margin-top: 2.4vh; font-size: 3.2vh; font-weight: 600; line-height: 1.3; max-height: 8.4vh; overflow: hidden; }
+#mrtv-open-note { margin-top: 1vh; font-size: 2.1vh; color: rgba(255, 255, 255, .5); }
