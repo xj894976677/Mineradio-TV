@@ -11,7 +11,7 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.5.0' };
+  var TV = window.MRTV = { version: '0.6.0' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';
@@ -30,6 +30,8 @@
   var hudTimer = 0;
   var toastTimer = 0;
   var prefs = readJson(PREF_KEY) || { beat: true };
+  if (prefs.drift == null) prefs.drift = true;
+  if (prefs.lyricPlace == null) prefs.lyricPlace = 'middle';
 
   function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
   function writeJson(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { } }
@@ -641,6 +643,7 @@
     var now = Date.now();
     if (now < visualBusyUntil) return; // one particle transition at a time
     visualBusyUntil = now + 700;
+    slowWindows = 0;
     var at = order.indexOf(currentPreset());
     var next = order[((at < 0 ? 0 : at) + dir + order.length) % order.length];
     try { setPreset(next); } catch (e) { console.warn('[MRTV] preset', e); return; }
@@ -684,9 +687,13 @@
     { title: '歌词', value: function () { return (typeof fx !== 'undefined' && fx && fx.particleLyrics) ? '显示' : '隐藏'; },
       change: function () { if (has('setParticleLyricsSilently')) setParticleLyricsSilently(!(fx && fx.particleLyrics)); } },
     { title: '画面精细度', value: function () { var q = (typeof fx !== 'undefined' && fx && fx.performanceQuality) || 'eco'; return QUALITY_TEXT[q] || q; },
-      change: function (d) { var q = (fx && fx.performanceQuality) || 'eco'; var i = QUALITY.indexOf(q); i = (Math.max(0, i) + (d || 1) + QUALITY.length) % QUALITY.length; if (has('setPerformanceQualityMode')) setPerformanceQualityMode(QUALITY[i], true); } },
+      change: function (d) { var q = (fx && fx.performanceQuality) || 'eco'; var i = QUALITY.indexOf(q); i = (Math.max(0, i) + (d || 1) + QUALITY.length) % QUALITY.length; if (has('setPerformanceQualityMode')) setPerformanceQualityMode(QUALITY[i], true); prefs.autoQuality = false; writeJson(PREF_KEY, prefs); } },
     { title: '节奏分析（镜头随鼓点）', value: function () { return prefs.beat ? '开' : '关'; },
       change: function () { prefs.beat = !prefs.beat; writeJson(PREF_KEY, prefs); } },
+    { title: '镜头缓慢移动', value: function () { return prefs.drift ? '开' : '关'; },
+      change: function () { prefs.drift = !prefs.drift; writeJson(PREF_KEY, prefs); if (!prefs.drift) settleCamera(); } },
+    { title: '歌词位置', value: function () { return LYRIC_PLACE_TEXT[prefs.lyricPlace] || '居中'; },
+      change: function (d) { var i = LYRIC_PLACES.indexOf(prefs.lyricPlace); prefs.lyricPlace = LYRIC_PLACES[(Math.max(0, i) + (d || 1) + LYRIC_PLACES.length) % LYRIC_PLACES.length]; writeJson(PREF_KEY, prefs); applyLyricPlace(); } },
     qualityRow('网易云音质', 'netease'),
     qualityRow('QQ 音乐音质', 'qq'),
     { title: '网易云账号', action: true, value: function () { return online.state !== 'ready' ? (online.state === 'failed' ? '不可用' : '启动中…') : (online.user ? (online.user.nickname || '已登录') + '　OK 退出登录' : '未登录　OK 登录'); },
@@ -848,6 +855,69 @@
     window.addEventListener(type, function (e) { if (!e.isTrusted) return; e.stopImmediatePropagation(); if (type !== 'mousemove') e.preventDefault(); }, true);
   });
 
+  // ---- What a TV needs of the picture --------------------------------------------------------
+  // Mineradio's stage is composed for a desk: the camera answers the mouse, and the lightest
+  // render tier is the default. A TV has no mouse and a big screen seen from a sofa, so:
+  //  - the camera drifts slowly around the stage by itself (the mouse's part), unless a visual
+  //    drives the camera itself;
+  //  - the picture starts at the fine tier and steps down by itself if the TV cannot hold the
+  //    frame rate, until the owner chooses a tier;
+  //  - where the lyrics sit can be chosen (middle, lower, higher);
+  //  - the first start shows the cover-particle visual.
+  var LYRIC_PLACES = ['middle', 'lower', 'higher'];
+  var LYRIC_PLACE_TEXT = { middle: '居中', lower: '偏下', higher: '偏上' };
+  var LYRIC_PLACE_Y = { middle: 0, lower: -0.9, higher: 0.9 };
+  function applyLyricPlace() {
+    try { if (typeof fx !== 'undefined' && fx) fx.lyricOffsetY = LYRIC_PLACE_Y[prefs.lyricPlace] || 0; } catch (e) { }
+  }
+  function settleCamera() {
+    try { orbit.userTheta = orbit.baselineTheta; orbit.userPhi = orbit.baselinePhi; } catch (e) { }
+  }
+  var frames = 0, slowWindows = 0, driftStart = performance.now();
+  function playingOnStage() {
+    return mode === 'stage' && !document.hidden && typeof audio !== 'undefined' && audio && !audio.paused;
+  }
+  function eachFrame(now) {
+    frames++;
+    if (prefs.drift && playingOnStage() && typeof orbit !== 'undefined' && orbit && !orbit.rotating &&
+        !(has('sonicPresetCameraActive') && sonicPresetCameraActive())) {
+      var t = (now - driftStart) / 1000;
+      // Two slow, unrelated periods: the path does not visibly repeat.
+      orbit.userTheta = orbit.baselineTheta + 0.26 * Math.sin(t * 0.085) + 0.05 * Math.sin(t * 0.23 + 1.1);
+      orbit.userPhi = orbit.baselinePhi + 0.055 * Math.sin(t * 0.061 + 0.7);
+    }
+    requestAnimationFrame(eachFrame);
+  }
+  function watchFrameRate() {
+    var WINDOW_S = 6;
+    setInterval(function () {
+      var fps = frames / WINDOW_S;
+      frames = 0;
+      if (!prefs.autoQuality || !playingOnStage()) { slowWindows = 0; return; }
+      slowWindows = fps < 38 ? slowWindows + 1 : 0;
+      // Three windows in a row (18 s): a song loading or a visual changing over is slow for a moment.
+      if (slowWindows < 3) return;
+      slowWindows = 0;
+      var q = (fx && fx.performanceQuality) || 'eco';
+      var at = QUALITY.indexOf(q);
+      if (at <= 0 || !has('setPerformanceQualityMode')) { prefs.autoQuality = false; writeJson(PREF_KEY, prefs); return; }
+      setPerformanceQualityMode(QUALITY[at - 1], true);
+      toast('画面调到「' + QUALITY_TEXT[QUALITY[at - 1]] + '」以保持流畅', 3200);
+    }, WINDOW_S * 1000);
+  }
+  function setUpPicture() {
+    if (!prefs.pictureInit) {
+      prefs.pictureInit = 1;
+      prefs.autoQuality = true;
+      writeJson(PREF_KEY, prefs);
+      try { if (has('setPreset') && currentPreset() !== 0) setPreset(0); } catch (e) { }
+      try { if (has('setPerformanceQualityMode')) setPerformanceQualityMode('high', true); } catch (e) { }
+    }
+    applyLyricPlace();
+    requestAnimationFrame(eachFrame);
+    watchFrameRate();
+  }
+
   // ---- Mineradio dialogs a TV cannot answer -----------------------------------------------
   function patchMineradio() {
     // Local lyrics come from the TV shell (a same-name .lrc next to the file).
@@ -897,6 +967,7 @@
       return;
     }
     patchMineradio();
+    setUpPicture();
     try { if (document.body.classList.contains('splash-active') && has('dismissSplash')) dismissSplash({}); } catch (e) { }
     setTimeout(function () {
       loadLibrary('boot');
