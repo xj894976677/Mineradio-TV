@@ -11,7 +11,7 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.7.1' };
+  var TV = window.MRTV = { version: '0.7.2' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';
@@ -33,6 +33,7 @@
   if (prefs.drift == null) prefs.drift = true;
   if (prefs.lyricPlace == null) prefs.lyricPlace = 'middle';
   if (prefs.layout == null) prefs.layout = 'split';
+  if (prefs.lyricLines == null) prefs.lyricLines = 7;
 
   function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
   function writeJson(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { } }
@@ -706,6 +707,8 @@
       change: function () { prefs.drift = !prefs.drift; writeJson(PREF_KEY, prefs); if (!prefs.drift) settleCamera(); } },
     { title: '画面布局', value: function () { return prefs.layout === 'split' ? '封面在左，歌词在右' : '居中'; },
       change: function () { prefs.layout = prefs.layout === 'split' ? 'center' : 'split'; writeJson(PREF_KEY, prefs); applyLayout(true); } },
+    { title: '歌词行数', value: function () { return prefs.lyricLines + ' 行'; },
+      change: function (d) { var i = LYRIC_LINE_CHOICES.indexOf(Number(prefs.lyricLines)); prefs.lyricLines = LYRIC_LINE_CHOICES[(Math.max(0, i) + (d || 1) + LYRIC_LINE_CHOICES.length) % LYRIC_LINE_CHOICES.length]; writeJson(PREF_KEY, prefs); applyLyricLines(); } },
     { title: '歌词位置', value: function () { return LYRIC_PLACE_TEXT[prefs.lyricPlace] || '居中'; },
       change: function (d) { var i = LYRIC_PLACES.indexOf(prefs.lyricPlace); prefs.lyricPlace = LYRIC_PLACES[(Math.max(0, i) + (d || 1) + LYRIC_PLACES.length) % LYRIC_PLACES.length]; writeJson(PREF_KEY, prefs); applyLyricPlace(); } },
     qualityRow('网易云音质', 'netease'),
@@ -910,6 +913,21 @@
       camera.updateProjectionMatrix();
     } catch (e) { }
   }
+  // How many lyric lines the stage shows: the line being sung in the middle, the rest around it.
+  // Mineradio has fixed modes for 1, 3 and 5 and a "custom" count up to 10.
+  var LYRIC_LINE_CHOICES = [1, 3, 5, 7, 9];
+  function applyLyricLines() {
+    try {
+      if (typeof fx === 'undefined' || !fx) return;
+      var n = LYRIC_LINE_CHOICES.indexOf(Number(prefs.lyricLines)) >= 0 ? Number(prefs.lyricLines) : 7;
+      var modeName = n === 1 ? 'single' : n === 3 ? 'triple' : n === 5 ? 'cinema' : 'custom';
+      if (modeName === 'custom') fx.lyricCustomLineCount = n;
+      if (fx.lyricDisplayMode === modeName && modeName !== 'custom' && applyLyricLines.done === n) return;
+      fx.lyricDisplayMode = modeName;
+      applyLyricLines.done = n;
+      if (has('refreshStageLyricDisplayMode')) refreshStageLyricDisplayMode();
+    } catch (e) { }
+  }
   function applyLyricPlace() {
     try { if (typeof fx !== 'undefined' && fx) fx.lyricOffsetY = LYRIC_PLACE_Y[prefs.lyricPlace] || 0; } catch (e) { }
   }
@@ -962,6 +980,7 @@
       try { if (has('setPerformanceQualityMode')) setPerformanceQualityMode('ultra', true); } catch (e) { }
     }
     applyLyricPlace();
+    applyLyricLines();
     applyLayout(true);
     setInterval(function () { applyLayout(false); }, 400);
     requestAnimationFrame(eachFrame);
