@@ -406,7 +406,7 @@
     Escape: 'back', Backspace: 'back', GoBack: 'back', BrowserBack: 'back',
     MediaPlayPause: 'playpause', MediaPlay: 'playpause', MediaPause: 'playpause',
     MediaTrackNext: 'next', MediaTrackPrevious: 'prev', MediaFastForward: 'ff', MediaRewind: 'rw',
-    ContextMenu: 'menu'
+    ContextMenu: 'menu', Tab: 'menu'
   };
   var held = { key: '', repeats: 0 };
   function onBack() {
