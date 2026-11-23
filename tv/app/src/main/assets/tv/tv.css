@@ -5,7 +5,7 @@ html.mrtv #desktop-titlebar, html.mrtv #search-area, html.mrtv #top-right, html.
 html.mrtv #fx-panel, html.mrtv #bottom-bar, html.mrtv #empty-home, html.mrtv #hint,
 html.mrtv #visual-guide-btn, html.mrtv #update-entry, html.mrtv #diy-mode-btn,
 html.mrtv #fullscreen-diy-zone, html.mrtv #idle-guide-canvas, html.mrtv #local-beat-modal,
-html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash { display: none !important; }
+html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash, html.mrtv #visual-guide { display: none !important; }
 
 #mrtv-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; font-family: "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif; color: #fff; }
 #mrtv-root * { box-sizing: border-box; }
@@ -84,7 +84,8 @@ html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash { display: n
 
 /* Library: a wall of cards by section; a card opens its songs. */
 #mrtv-lib-body { display: block; }
-#mrtv-cards { height: 100%; display: flex; flex-direction: column; gap: 2.2vh; overflow: hidden; }
+/* Room around the rows: the focused card grows, and must not be cut by the wall's own edge. */
+#mrtv-cards { height: calc(100% + 3vh); display: flex; flex-direction: column; gap: 2.2vh; overflow: hidden; padding: 1.5vh 1.5vw; margin: -1.5vh -1.5vw; }
 .mrtv-sec-title { font-size: 2.5vh; color: rgba(255, 255, 255, .5); margin-bottom: 1.2vh; display: flex; align-items: baseline; gap: 1vw; }
 .mrtv-sec.active .mrtv-sec-title { color: #fff; }
 .mrtv-sec-title small { font-size: 1.8vh; color: rgba(255, 255, 255, .38); }

@@ -868,6 +868,9 @@
       } catch (e) { }
     };
     window.maybeRunStartupLoginGuide = function () { return false; };
+    // Mineradio's mouse-driven tour of its desktop interface.
+    window.startVisualGuide = function () { return false; };
+    try { if (has('closeVisualGuide')) closeVisualGuide(); } catch (e) { }
     var quietToast = window.showToast;
     if (typeof quietToast === 'function') {
       window.showToast = function (msg) {
