@@ -26,6 +26,23 @@ function unavailable(name) {
   });
 }
 
+// nodejs-mobile is built without ICU's property tables, so a regular expression with \p{L} or
+// \p{N} does not compile there ("Invalid property name"). Mineradio uses the two only to strip
+// punctuation (cuefield). Where the runtime lacks them, they are spelled out as ranges when a
+// module is compiled: Latin with accents, Greek to the end of the BMP's scripts, CJK, digits.
+let unicodeProperties = true;
+try { new RegExp('\\p{L}', 'u'); } catch (e) { unicodeProperties = false; }
+if (!unicodeProperties) {
+  const LETTERS = 'a-zA-Z\\u00C0-\\u024F\\u0370-\\u1FFF\\u2E80-\\uD7FF\\uF900-\\uFFDC';
+  const compile = Module.prototype._compile;
+  Module.prototype._compile = function (content, filename) {
+    if (typeof content === 'string' && content.indexOf('\\p{') >= 0) {
+      content = content.split('\\p{L}').join(LETTERS).split('\\p{N}').join('0-9');
+    }
+    return compile.call(this, content, filename);
+  };
+}
+
 const load = Module._load;
 Module._load = function (request, parent, isMain) {
   const base = path.basename(String(request)).replace(/\.js$/, '');

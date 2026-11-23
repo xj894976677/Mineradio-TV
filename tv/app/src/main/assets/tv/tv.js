@@ -11,7 +11,7 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.7.0' };
+  var TV = window.MRTV = { version: '0.7.1' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';
@@ -32,6 +32,7 @@
   var prefs = readJson(PREF_KEY) || { beat: true };
   if (prefs.drift == null) prefs.drift = true;
   if (prefs.lyricPlace == null) prefs.lyricPlace = 'middle';
+  if (prefs.layout == null) prefs.layout = 'split';
 
   function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
   function writeJson(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { } }
@@ -226,7 +227,7 @@
     started = true;
     hideEmpty();
     dismissTitle();
-    try { if (has('setImmersiveMode')) setImmersiveMode(true); } catch (e) { }
+    enterStage();
     Promise.resolve(playQueueAt(currentIdx, { manual: false, startupAutoplay: true })).catch(function () { started = false; });
   }
   function watchBackend() {
@@ -251,6 +252,7 @@
     var all = songs.map(function (_, i) { return i; });
     var out = [];
     if (songs.length) out.push({ section: '本地音乐', title: '全部歌曲', note: songs.length + ' 首', indexes: all });
+    else out.push({ section: '本地音乐', title: '全部歌曲', note: libraryInfo.scanning ? '正在扫描…' : '0 首', items: [], emptyLocal: true });
     var byFolder = {}, folderOrder = [];
     var byAlbum = {}, albumOrder = [];
     var byArtist = {}, artistOrder = [];
@@ -306,19 +308,22 @@
   }
   TV.onLibraryChanged = function () { loadLibrary('mount'); };
 
+  // No local music is not a screen of its own: the library says "0" and shows what else there
+  // is. Only a missing storage permission stops here, since nothing can be read without it.
   function showEmpty() {
-    var noAccess = libraryInfo.access === 'none';
-    $('mrtv-empty-title').textContent = libraryInfo.scanning ? '正在扫描音乐…' : (noAccess ? '需要读取存储的权限' : '没有找到音乐');
-    $('mrtv-empty-line1').textContent = noAccess ? '允许 Mineradio TV 读取 U 盘和本机里的音乐文件。' : '把存有音乐的 U 盘或移动硬盘插到电视上，会自动开始播放。';
-    $('mrtv-empty-line2').textContent = noAccess ? '' : '支持 MP3、FLAC、M4A、WAV、OGG；同名的 .lrc 是歌词，文件夹里的 cover.jpg 是封面。';
-    $('mrtv-empty-btn').textContent = noAccess ? '按 OK 去授权' : '按 OK 重新扫描';
-    if (online.state === 'ready' && !noAccess) {
-      $('mrtv-empty-line2').textContent = '也可以听在线音乐：网易云的榜单；在设置里登录后还有每日推荐和你的歌单。';
-      $('mrtv-empty-btn').textContent = '按 OK 打开在线音乐';
-    }
     if (currentSong()) { hideEmpty(); return; }
-    $('mrtv-empty').classList.add('show');
-    if (mode === 'stage') mode = 'empty';
+    if (libraryInfo.access === 'none') {
+      $('mrtv-empty-title').textContent = '需要读取存储的权限';
+      $('mrtv-empty-line1').textContent = '允许 Mineradio TV 读取 U 盘和本机里的音乐文件。';
+      $('mrtv-empty-line2').textContent = online.state === 'ready' ? '不授权也可以听在线音乐：按菜单键打开设置，或按返回键进入曲库。' : '';
+      $('mrtv-empty-btn').textContent = '按 OK 去授权';
+      $('mrtv-empty').classList.add('show');
+      if (mode === 'stage') mode = 'empty';
+      return;
+    }
+    $('mrtv-empty').classList.remove('show');
+    if (mode === 'empty') mode = 'stage';
+    if (mode === 'stage' && !libraryInfo.scanning) openLibrary(true);
   }
   function hideEmpty() {
     $('mrtv-empty').classList.remove('show');
@@ -333,11 +338,17 @@
     for (var i = 0; i < tracks.length; i++) if (tracks[i].key === song.localKey) return tracks[i];
     return null;
   }
+  /** The stage as a TV shows it: Mineradio's immersive mode (no chrome) with the lyrics on. */
+  function enterStage() {
+    try { if (has('setImmersiveMode') && !document.body.classList.contains('immersive-mode')) setImmersiveMode(true); } catch (e) { }
+    try { if (prefs.lyrics !== false && typeof fx !== 'undefined' && fx && !fx.particleLyrics && has('setParticleLyricsSilently')) setParticleLyricsSilently(true); } catch (e) { }
+  }
   function playList(indexes, at, resumeAt) { playSongs(indexes.map(function (i) { return songs[i]; }), at, resumeAt); }
   function playSongs(items, at, resumeAt) {
     var list = items.filter(Boolean).map(function (song) { return Object.assign({}, song); });
     if (!list.length) return;
     hideEmpty();
+    enterStage();
     try {
       homeForcedOpen = false; homeSuppressed = false;
       if (has('setHomeControlsLocked')) setHomeControlsLocked(false);
@@ -373,7 +384,7 @@
     showHud(2600);
   }
   function playPause() {
-    if (!currentSong()) { if (songs.length) startPlayback(); return; }
+    if (!currentSong()) { if (songs.length) startPlayback(); else openLibrary(true); return; }
     if (has('togglePlay')) togglePlay();
     setTimeout(function () { showHud(); }, 120);
   }
@@ -471,6 +482,7 @@
     $('mrtv-open-note').textContent = [g.section, items.length ? items.length + ' 首' : ''].filter(Boolean).join(' · ');
     var html = '';
     if (g.online && !g.items) { html = '<div class="mrtv-note">' + (g.failed ? '没有加载出来，按 OK 再试一次。' : '正在加载…') + '</div>'; if (!g.failed) loadOnlineGroup(g); }
+    else if (g.emptyLocal) html = '<div class="mrtv-note">还没有本地音乐。<br>把存有音乐的 U 盘或移动硬盘插到电视上，会自动出现在这里。<br>支持 MP3、FLAC、M4A、WAV、OGG；同名的 .lrc 是歌词，文件夹里的 cover.jpg 是封面。</div>';
     else if (!items.length) html = '<div class="mrtv-note">这里还没有歌曲。</div>';
     for (var j = lib.trackTop; j < Math.min(items.length, lib.trackTop + ROWS); j++) {
       var t = items[j];
@@ -624,7 +636,7 @@
   };
 
   // ---- Settings panel --------------------------------------------------------------------
-  var QUALITY = ['eco', 'balanced', 'high'];
+  var QUALITY = ['eco', 'balanced', 'high', 'ultra'];
   var QUALITY_TEXT = { eco: '流畅', balanced: '均衡', high: '精细', ultra: '极致' };
   function presetCount() { return document.querySelectorAll('#preset-grid .preset-card').length; }
   function presetName(i) {
@@ -685,13 +697,15 @@
     { title: '视觉效果', value: function () { return presetCount() ? presetName(currentPreset()) + '（' + (presetOrder().indexOf(currentPreset()) + 1) + ' / ' + presetCount() + '）' : '默认'; },
       change: function (d) { cycleVisual(d || 1); } },
     { title: '歌词', value: function () { return (typeof fx !== 'undefined' && fx && fx.particleLyrics) ? '显示' : '隐藏'; },
-      change: function () { if (has('setParticleLyricsSilently')) setParticleLyricsSilently(!(fx && fx.particleLyrics)); } },
+      change: function () { var on = !(fx && fx.particleLyrics); if (has('setParticleLyricsSilently')) setParticleLyricsSilently(on); prefs.lyrics = on; writeJson(PREF_KEY, prefs); } },
     { title: '画面精细度', value: function () { var q = (typeof fx !== 'undefined' && fx && fx.performanceQuality) || 'eco'; return QUALITY_TEXT[q] || q; },
       change: function (d) { var q = (fx && fx.performanceQuality) || 'eco'; var i = QUALITY.indexOf(q); i = (Math.max(0, i) + (d || 1) + QUALITY.length) % QUALITY.length; if (has('setPerformanceQualityMode')) setPerformanceQualityMode(QUALITY[i], true); prefs.autoQuality = false; writeJson(PREF_KEY, prefs); } },
     { title: '节奏分析（镜头随鼓点）', value: function () { return prefs.beat ? '开' : '关'; },
       change: function () { prefs.beat = !prefs.beat; writeJson(PREF_KEY, prefs); } },
     { title: '镜头缓慢移动', value: function () { return prefs.drift ? '开' : '关'; },
       change: function () { prefs.drift = !prefs.drift; writeJson(PREF_KEY, prefs); if (!prefs.drift) settleCamera(); } },
+    { title: '画面布局', value: function () { return prefs.layout === 'split' ? '封面在左，歌词在右' : '居中'; },
+      change: function () { prefs.layout = prefs.layout === 'split' ? 'center' : 'split'; writeJson(PREF_KEY, prefs); applyLayout(true); } },
     { title: '歌词位置', value: function () { return LYRIC_PLACE_TEXT[prefs.lyricPlace] || '居中'; },
       change: function (d) { var i = LYRIC_PLACES.indexOf(prefs.lyricPlace); prefs.lyricPlace = LYRIC_PLACES[(Math.max(0, i) + (d || 1) + LYRIC_PLACES.length) % LYRIC_PLACES.length]; writeJson(PREF_KEY, prefs); applyLyricPlace(); } },
     qualityRow('网易云音质', 'netease'),
@@ -738,8 +752,7 @@
     $('mrtv-settings').classList.remove('show');
     $('mrtv-login').classList.remove('show');
     stopLoginPoll();
-    mode = (songs.length || currentSong()) ? 'stage' : 'empty';
-    if (mode === 'empty') showEmpty();
+    mode = 'stage';
     if (mode === 'stage') showHud(2600);
   }
   function exitApp() {
@@ -758,6 +771,7 @@
   };
   var held = { key: '', repeats: 0 };
   function onBack() {
+    if (mode === 'empty') { $('mrtv-empty').classList.remove('show'); mode = 'stage'; openLibrary(true); return true; }
     // One level at a time: sign-in -> where it was opened from; settings -> the library if it
     // came from there; the track list -> the group list -> the stage.
     if (mode === 'login') {
@@ -773,8 +787,9 @@
       return true;
     }
     if (mode === 'library') {
-      if (lib.level === 'tracks') { lib.level = 'cards'; renderLibrary(); } else closePanels();
-      return true;
+      if (lib.level === 'tracks') { lib.level = 'cards'; renderLibrary(); return true; }
+      // With a song on stage the library closes onto it; with none, back here is leaving.
+      if (currentSong()) { closePanels(); return true; }
     }
     var now = Date.now();
     if (now - lastBackAt < 2500) { exitApp(); return false; }
@@ -796,8 +811,7 @@
     if (mode === 'login') { if (key === 'ok') newLoginCode(); return; }
     if (mode === 'empty') {
       if (key === 'ok') {
-        if (online.state === 'ready' && libraryInfo.access !== 'none') openLibrary();
-        else if (libraryInfo.access === 'none' && native && native.requestAccess) native.requestAccess();
+        if (libraryInfo.access === 'none' && native && native.requestAccess) native.requestAccess();
         else api('/tvapi/rescan').then(function () { setTimeout(function () { loadLibrary('mount'); }, 1200); }).catch(function () { });
       } else if (key === 'menu' || key === 'down') openSettings();
       return;
@@ -867,6 +881,35 @@
   var LYRIC_PLACES = ['middle', 'lower', 'higher'];
   var LYRIC_PLACE_TEXT = { middle: '居中', lower: '偏下', higher: '偏上' };
   var LYRIC_PLACE_Y = { middle: 0, lower: -0.9, higher: 0.9 };
+  // A 16:9 screen with a square cover in the middle leaves both sides empty. For the visuals that
+  // are a cover (the cover particles, the record), the picture is composed like a now-playing
+  // screen instead: the cover to the left, the lyrics beside it. The camera's view is offset
+  // (so the stage itself is untouched) and the lyrics move and shrink to their column. Visuals
+  // that fill the screen stay centred.
+  var SPLIT_PRESETS = [0, 4];
+  var SPLIT = { shift: 0.2, lyricX: 3.75, lyricScale: 0.6 };
+  var layoutApplied = '';
+  function applyLayout(force) {
+    if (typeof camera === 'undefined' || !camera || typeof renderer === 'undefined' || !renderer || typeof fx === 'undefined' || !fx) return;
+    var split = prefs.layout === 'split' && SPLIT_PRESETS.indexOf(Number(fx.preset)) >= 0;
+    var w = renderer.domElement.width, h = renderer.domElement.height;
+    var key = (split ? 'split' : 'center') + ':' + w + 'x' + h;
+    var viewLost = split && !(camera.view && camera.view.enabled);
+    if (!force && key === layoutApplied && !viewLost && (!split || Math.abs((fx.lyricOffsetX || 0) - SPLIT.lyricX) < 0.01)) return;
+    layoutApplied = key;
+    try {
+      if (split) {
+        camera.setViewOffset(w, h, Math.round(w * SPLIT.shift), 0, w, h);
+        fx.lyricOffsetX = SPLIT.lyricX;
+        fx.lyricScale = SPLIT.lyricScale;
+      } else {
+        if (camera.view && camera.view.enabled) camera.clearViewOffset();
+        fx.lyricOffsetX = 0;
+        fx.lyricScale = 1;
+      }
+      camera.updateProjectionMatrix();
+    } catch (e) { }
+  }
   function applyLyricPlace() {
     try { if (typeof fx !== 'undefined' && fx) fx.lyricOffsetY = LYRIC_PLACE_Y[prefs.lyricPlace] || 0; } catch (e) { }
   }
@@ -893,7 +936,10 @@
     setInterval(function () {
       var fps = frames / WINDOW_S;
       frames = 0;
-      if (!prefs.autoQuality || !playingOnStage()) { slowWindows = 0; return; }
+      // Beat analysis decodes the whole song once and takes the frames with it for a while
+      // (38-44 fps against 59 on a Mali-G57 TV): that is not the picture being too heavy.
+      var analysing = (typeof beatMapBusy !== 'undefined' && beatMapBusy) || (typeof djBeatMapBusy !== 'undefined' && djBeatMapBusy) || (typeof localBeatAnalysis !== 'undefined' && localBeatAnalysis && localBeatAnalysis.active);
+      if (!prefs.autoQuality || !playingOnStage() || analysing) { slowWindows = 0; return; }
       slowWindows = fps < 38 ? slowWindows + 1 : 0;
       // Three windows in a row (18 s): a song loading or a visual changing over is slow for a moment.
       if (slowWindows < 3) return;
@@ -906,14 +952,18 @@
     }, WINDOW_S * 1000);
   }
   function setUpPicture() {
-    if (!prefs.pictureInit) {
-      prefs.pictureInit = 1;
+    // 2: starts at the finest tier (a Mali-G57 TV held 59 fps at the tier below with room to spare).
+    if (prefs.pictureInit !== 2) {
+      var firstRun = !prefs.pictureInit;
+      prefs.pictureInit = 2;
       prefs.autoQuality = true;
       writeJson(PREF_KEY, prefs);
-      try { if (has('setPreset') && currentPreset() !== 0) setPreset(0); } catch (e) { }
-      try { if (has('setPerformanceQualityMode')) setPerformanceQualityMode('high', true); } catch (e) { }
+      try { if (firstRun && has('setPreset') && currentPreset() !== 0) setPreset(0); } catch (e) { }
+      try { if (has('setPerformanceQualityMode')) setPerformanceQualityMode('ultra', true); } catch (e) { }
     }
     applyLyricPlace();
+    applyLayout(true);
+    setInterval(function () { applyLayout(false); }, 400);
     requestAnimationFrame(eachFrame);
     watchFrameRate();
   }
@@ -951,7 +1001,7 @@
     var quietToast = window.showToast;
     if (typeof quietToast === 'function') {
       window.showToast = function (msg) {
-        if (/本地节奏缓存已载入|已导入|正在播放本地音乐|登录/.test(String(msg || ''))) return;
+        if (/本地节奏缓存已载入|已导入|正在播放本地音乐|登录|节奏分析完成|节奏分析中|正在分析/.test(String(msg || ''))) return;
         return quietToast.apply(this, arguments);
       };
     }
