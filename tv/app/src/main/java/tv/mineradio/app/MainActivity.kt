@@ -20,6 +20,11 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
+import android.widget.FrameLayout
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -37,6 +42,8 @@ import android.webkit.WebViewClient
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
+    private lateinit var root: FrameLayout
+    private var qqWeb: WebView? = null
     private lateinit var router: TvRouter
     private val main = Handler(Looper.getMainLooper())
     private var pageReady = false
@@ -86,7 +93,8 @@ class MainActivity : Activity() {
                 }
             }
         }
-        setContentView(web)
+        root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); addView(web, FrameLayout.LayoutParams(-1, -1)) }
+        setContentView(root)
 
         registerReceiver(mountReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_MEDIA_MOUNTED)
@@ -155,6 +163,11 @@ class MainActivity : Activity() {
             KeyEvent.KEYCODE_MEDIA_REWIND -> "rw"
             else -> return super.dispatchKeyEvent(event)
         }
+        if (qqWeb != null) {
+            // QQ's page needs no keys: the phone does the signing in. Back leaves it.
+            if (name == "back" && event.action == KeyEvent.ACTION_UP) closeQqLogin(false)
+            return true
+        }
         if (!pageReady) {
             if (name == "back" && event.action == KeyEvent.ACTION_UP) finish()
             return true
@@ -178,7 +191,77 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
+    // ---- QQ Music sign-in --------------------------------------------------------------------
+    // QQ's own sign-in page (a QR code for the QQ phone app) in a second WebView over the stage.
+    // When QQ Music's session cookies appear, they go to the back end on this TV
+    // (/api/qq/login/cookie, as Mineradio's desktop app does from its sign-in window) and the
+    // page closes. Nothing is typed, and the cookies go nowhere else.
+    private val qqPoll = object : Runnable {
+        override fun run() {
+            if (qqWeb == null) return
+            val cookies = QQ_COOKIE_URLS.mapNotNull { runCatching { CookieManager.getInstance().getCookie(it) }.getOrNull() }
+                .flatMap { it.split(';') }.map { it.trim() }.filter { it.contains('=') }.distinctBy { it.substringBefore('=') }
+            val signedIn = cookies.any { c -> QQ_SESSION_KEYS.any { c.startsWith("$it=") && c.length > it.length + 8 } }
+            if (!signedIn) { main.postDelayed(this, 1500); return }
+            val cookie = cookies.joinToString("; ")
+            thread(name = "mrtv-qq-login") {
+                val ok = runCatching {
+                    val c = URL("${TvRouter.ORIGIN}/api/qq/login/cookie").openConnection() as HttpURLConnection
+                    c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 4000; c.readTimeout = 20000
+                    c.setRequestProperty("Content-Type", "application/json")
+                    c.outputStream.use { it.write(org.json.JSONObject().put("cookie", cookie).toString().toByteArray()) }
+                    val body = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
+                    org.json.JSONObject(body).optBoolean("loggedIn")
+                }.getOrDefault(false)
+                main.post {
+                    if (qqWeb == null) return@post
+                    if (ok) closeQqLogin(true) else main.postDelayed(this, 2500) // the session may still be settling
+                }
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun openQqLogin() {
+        if (qqWeb != null) return
+        val cm = CookieManager.getInstance()
+        cm.setAcceptCookie(true)
+        val view = WebView(this).apply {
+            setBackgroundColor(Color.WHITE)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.userAgentString = QQ_USER_AGENT
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
+            isFocusable = false
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    // The QR code is small on a page laid out for a desk: bring it up to TV size.
+                    if (url.contains("graph.qq.com") || url.contains("xui.ptlogin2.qq.com")) {
+                        view.evaluateJavascript("document.documentElement.style.zoom='2.2';document.body.style.background='#fff';", null)
+                    }
+                }
+            }
+        }
+        cm.setAcceptThirdPartyCookies(view, true)
+        qqWeb = view
+        root.addView(view, FrameLayout.LayoutParams(-1, -1))
+        view.loadUrl(QQ_LOGIN_URL)
+        main.postDelayed(qqPoll, 2500)
+    }
+
+    private fun closeQqLogin(signedIn: Boolean) {
+        val view = qqWeb ?: return
+        qqWeb = null
+        main.removeCallbacks(qqPoll)
+        root.removeView(view)
+        view.destroy()
+        web.requestFocus()
+        js("window.MRTV && MRTV.onQqLogin && MRTV.onQqLogin(${signedIn})")
+    }
+
     override fun onDestroy() {
+        qqWeb?.let { runCatching { it.destroy() } }
         runCatching { unregisterReceiver(mountReceiver) }
         main.removeCallbacksAndMessages(null)
         web.destroy()
@@ -188,8 +271,16 @@ class MainActivity : Activity() {
     private inner class Bridge {
         @JavascriptInterface fun exit() { main.post { finish() } }
         @JavascriptInterface fun requestAccess() { main.post { askForAllFiles() } }
+        @JavascriptInterface fun loginQQ() { main.post { openQqLogin() } }
         @JavascriptInterface fun access(): String = MusicLibrary.access(this@MainActivity)
     }
 
-    private companion object { const val TAG = "MineradioTV" }
+    private companion object {
+        const val TAG = "MineradioTV"
+        // QQ's sign-in for QQ Music's web player (its app id), landing back on y.qq.com.
+        const val QQ_LOGIN_URL = "https://graph.qq.com/oauth2.0/authorize?response_type=code&state=state&client_id=100497308&redirect_uri=https%3A%2F%2Fy.qq.com%2Fportal%2Fwx_redirect.html%3Flogin_type%3D1%26surl%3Dhttps%253A%252F%252Fy.qq.com%252F"
+        const val QQ_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        val QQ_COOKIE_URLS = listOf("https://y.qq.com", "https://qq.com", "https://c.y.qq.com", "https://u.y.qq.com")
+        val QQ_SESSION_KEYS = listOf("qqmusic_key", "qm_keyst")
+    }
 }

@@ -20,9 +20,12 @@ html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash { display: n
 #mrtv-hud-bar { margin-top: 1.3vh; height: .6vh; width: 36vw; max-width: 100%; border-radius: 1vh; background: rgba(255, 255, 255, .16); overflow: hidden; }
 #mrtv-hud-fill { height: 100%; width: 0; background: #fff; border-radius: 1vh; }
 #mrtv-hud-meta { margin-top: .8vh; font-size: 1.9vh; color: rgba(255, 255, 255, .55); display: flex; gap: 1.4vw; }
-#mrtv-keys { position: absolute; right: 4vw; bottom: 6vh; font-size: 1.9vh; color: rgba(255, 255, 255, .5); opacity: 0; transition: opacity .35s ease; text-align: right; line-height: 1.7; }
-#mrtv-keys.show { opacity: 1; }
-#mrtv-keys b { display: inline-block; min-width: 3.2vh; padding: 0 .8vh; margin: 0 .5vh 0 1.2vh; border-radius: .7vh; background: rgba(255, 255, 255, .16); color: #fff; font-weight: 500; text-align: center; }
+/* Key hints: a small table, key caps in one column and what they do in the next. */
+#mrtv-keys { position: absolute; right: 4vw; bottom: 6vh; display: grid; grid-template-columns: auto auto auto auto; column-gap: 1vw; row-gap: 1vh; align-items: center; padding: 1.8vh 1.6vw; border-radius: 2.2vh; background: rgba(12, 12, 16, .62); border: 1px solid rgba(255, 255, 255, .12); font-size: 1.9vh; line-height: 1; opacity: 0; transform: translateY(2vh); transition: opacity .35s ease, transform .35s ease; }
+#mrtv-keys.show { opacity: 1; transform: none; }
+#mrtv-keys b { justify-self: stretch; min-width: 9vh; padding: .8vh 1vh; border-radius: .8vh; background: rgba(255, 255, 255, .14); color: #fff; font-weight: 500; text-align: center; white-space: nowrap; }
+#mrtv-keys span { padding-right: 1.4vw; color: rgba(255, 255, 255, .66); white-space: nowrap; }
+#mrtv-keys span:nth-child(4n) { padding-right: 0; }
 
 #mrtv-toast { position: absolute; left: 50%; top: 7vh; transform: translate(-50%, -2vh); padding: 1.3vh 2.4vw; border-radius: 4vh; background: rgba(12, 12, 16, .78); border: 1px solid rgba(255, 255, 255, .14); font-size: 2.4vh; opacity: 0; transition: opacity .3s ease, transform .3s ease; white-space: nowrap; }
 #mrtv-toast.show { opacity: 1; transform: translate(-50%, 0); }
