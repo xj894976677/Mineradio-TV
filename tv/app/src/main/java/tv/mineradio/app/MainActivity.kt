@@ -74,7 +74,7 @@ class MainActivity : Activity() {
             settings.setSupportZoom(false)
             addJavascriptInterface(Bridge(), "MineradioTVNative")
             webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse = router.handle(request)
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = router.handle(request)
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.host != TvRouter.HOST
                 override fun onPageFinished(view: WebView, url: String) { pageReady = true }
             }
@@ -96,6 +96,7 @@ class MainActivity : Activity() {
             addDataScheme("file")
         })
 
+        Backend.start(this)
         lastAccess = MusicLibrary.access(this)
         if (lastAccess == "none") askForAudioPermission()
         rescan.run()

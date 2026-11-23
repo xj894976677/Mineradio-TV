@@ -70,3 +70,11 @@ html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash { display: n
 @keyframes mrtv-blur-in { 0% { opacity: 0; filter: blur(1.6vh); transform: translateY(-5vh); } 55% { opacity: .6; filter: blur(.6vh); transform: translateY(.6vh); } 100% { opacity: 1; filter: blur(0); transform: none; } }
 @keyframes mrtv-shine { 0% { background-position: 130% 0; } 100% { background-position: -130% 0; } }
 @keyframes mrtv-sub-in { to { opacity: 1; } }
+
+.mrtv-note { padding: 3vh 1.4vw; font-size: 2.6vh; line-height: 1.8; color: rgba(255, 255, 255, .6); }
+#mrtv-login-body { flex: 1; display: flex; align-items: center; gap: 5vw; padding-left: 3vw; }
+#mrtv-login-qr { width: 46vh; height: 46vh; border-radius: 2vh; background: #fff; padding: 2vh; image-rendering: pixelated; }
+#mrtv-login-text { font-size: 2.6vh; color: rgba(255, 255, 255, .6); line-height: 1.9; }
+#mrtv-login-status { font-size: 3.6vh; color: #fff; margin-bottom: 3vh; }
+#mrtv-login-status.ok { color: #7fe3b0; }
+#mrtv-login-status.fail { color: #ff9a8f; }

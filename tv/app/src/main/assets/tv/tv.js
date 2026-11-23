@@ -11,7 +11,7 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.1.0' };
+  var TV = window.MRTV = { version: '0.2.0' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';
@@ -62,6 +62,8 @@
     '<div class="mrtv-panel" id="mrtv-library"><h2>曲库<small id="mrtv-lib-note"></small></h2>' +
     '<div id="mrtv-lib-body"><div class="mrtv-col" id="mrtv-groups"></div><div class="mrtv-col" id="mrtv-tracks"></div></div>' +
     '<div class="mrtv-foot">▲▼ 选择　◀▶ 切换分类和歌曲　OK 播放　菜单 设置　返回 关闭</div></div>' +
+    '<div class="mrtv-panel" id="mrtv-login"><h2>登录网易云音乐</h2><div id="mrtv-login-body"><img id="mrtv-login-qr" alt="">' +
+    '<div id="mrtv-login-text"><div id="mrtv-login-status"></div><p>登录信息只保存在这台电视上。</p><p>OK 换一个二维码　返回 取消</p></div></div></div>' +
     '<div class="mrtv-panel" id="mrtv-settings"><h2>设置</h2><div id="mrtv-settings-list"></div>' +
     '<div class="mrtv-foot">▲▼ 选择　◀▶ 或 OK 更改　返回 关闭</div></div>';
   document.body.appendChild(root);
@@ -119,9 +121,89 @@
       mrtvId: track.id
     };
   }
+  // Online: NetEase through Mineradio's own back end, which runs on the TV (see Backend.kt).
+  var NETEASE_CHARTS = [['热歌榜', 3778678], ['新歌榜', 3779629], ['飙升榜', 19723756], ['原创榜', 2884035]];
+  var online = { state: 'starting', user: null, groups: [] };
+  function songKey(song) { return song ? (song.localKey || ((song.provider || song.source || '') + ':' + (song.id || song.mid || song.name))) : ''; }
+  function thumbUrl(song, size) {
+    var url = song && song.cover ? String(song.cover) : '';
+    if (!url) return '';
+    if (/music\.126\.net/.test(url)) return url.replace(/^http:/, 'https:') + (url.indexOf('?') < 0 ? '?param=' + size + 'y' + size : '');
+    return url;
+  }
+  function onlineSong(raw) {
+    var song = Object.assign({}, raw);
+    song.mrtvSeconds = (Number(raw.duration) || 0) / 1000;
+    return song;
+  }
+  function buildOnlineGroups() {
+    var out = [];
+    if (online.state !== 'ready') { online.groups = out; return; }
+    if (online.user) {
+      out.push({ title: '每日推荐', note: '网易云', online: { kind: 'daily' }, items: null });
+      (online.playlists || []).forEach(function (pl) {
+        out.push({ title: pl.name || '歌单', note: '歌单' + (pl.trackCount ? ' · ' + pl.trackCount : ''), online: { kind: 'playlist', id: pl.id }, items: null });
+      });
+    } else {
+      out.push({ title: '登录网易云音乐', note: '扫码', login: true, items: [] });
+    }
+    NETEASE_CHARTS.forEach(function (c) { out.push({ title: c[0], note: '网易云榜单', online: { kind: 'playlist', id: c[1] }, items: null }); });
+    // Keep what was already loaded when the list is rebuilt.
+    out.forEach(function (g) {
+      var old = online.groups.filter(function (o) { return o.title === g.title && o.items && o.items.length; })[0];
+      if (old && g.online) g.items = old.items;
+    });
+    online.groups = out;
+  }
+  function groupItems(g) {
+    if (!g) return [];
+    if (g.items) return g.items;
+    if (g.indexes) return g.indexes.map(function (i) { return songs[i]; });
+    return [];
+  }
+  function loadOnlineGroup(g) {
+    if (!g || !g.online || g.items || g.loading) return;
+    g.loading = true;
+    var url = g.online.kind === 'daily' ? '/api/discover/home' : '/api/playlist/tracks?id=' + encodeURIComponent(g.online.id) + '&limit=300';
+    api(url).then(function (r) {
+      var list = g.online.kind === 'daily' ? (r && r.dailySongs) : (r && (r.tracks || r.songs));
+      g.items = (Array.isArray(list) ? list : []).map(onlineSong);
+      g.failed = !g.items.length;
+    }).catch(function () { g.items = []; g.failed = true; }).then(function () {
+      g.loading = false;
+      if (g.failed) g.items = null;
+      if (mode === 'library') renderLibrary();
+    });
+  }
+  function refreshOnline() {
+    return api('/api/login/status?t=' + Date.now()).then(function (st) {
+      online.user = st && st.loggedIn ? st : null;
+      if (!online.user) { online.playlists = []; return null; }
+      return api('/api/user/playlists').then(function (r) { online.playlists = (r && r.playlists) || []; });
+    }).catch(function () { }).then(function () {
+      buildOnlineGroups();
+      buildGroups();
+      if (mode === 'library') renderLibrary();
+      if (mode === 'empty') showEmpty();
+    });
+  }
+  function watchBackend() {
+    api('/tvapi/backend').then(function (r) {
+      var state = (r && r.state) || 'failed';
+      if (state === online.state) return;
+      online.state = state;
+      if (state === 'ready') { refreshOnline(); try { if (has('refreshLoginStatus')) refreshLoginStatus(true); } catch (e) { } }
+      else { buildOnlineGroups(); buildGroups(); }
+    }).catch(function () { }).then(function () {
+      if (online.state !== 'ready' && online.state !== 'failed') setTimeout(watchBackend, 1500);
+    });
+  }
+
   function buildGroups() {
     var all = songs.map(function (_, i) { return i; });
-    var out = [{ title: '全部歌曲', note: '', indexes: all }];
+    var out = [];
+    if (songs.length) out.push({ title: '全部歌曲', note: '本地', indexes: all });
+    online.groups.forEach(function (g) { out.push(g); });
     var byFolder = {}, folderOrder = [];
     var byAlbum = {}, albumOrder = [];
     var byArtist = {}, artistOrder = [];
@@ -138,6 +220,7 @@
     artistOrder.sort(cmp).forEach(function (name) { out.push({ title: name, note: '艺人', indexes: byArtist[name] }); });
     out.push({ title: '设置…', note: '', indexes: [], settings: true });
     groups = out;
+    lib.group = Math.max(0, Math.min(lib.group, groups.length - 1));
   }
   function setLibrary(payload) {
     libraryInfo = { access: payload.access || 'none', scanning: !!payload.scanning, volumes: payload.volumes || [] };
@@ -147,7 +230,6 @@
     tracks = next;
     songs = tracks.map(toSong);
     buildGroups();
-    lib.group = Math.min(lib.group, groups.length - 1);
     lib.track = 0; lib.trackTop = 0;
     return true;
   }
@@ -157,7 +239,7 @@
       if (!songs.length) { showEmpty(); if (!libraryInfo.scanning) dismissTitle(); return; }
       hideEmpty();
       dismissTitle();
-      if (!started) { started = true; startPlayback(); }
+      if (!started && !currentSong()) { started = true; startPlayback(); }
       else if (changed && mode === 'library') renderLibrary();
       if (changed && reason === 'mount') toast('已发现 ' + songs.length + ' 首歌曲');
     }).catch(function () { if (!songs.length) { showEmpty(); dismissTitle(); } });
@@ -170,6 +252,11 @@
     $('mrtv-empty-line1').textContent = noAccess ? '允许 Mineradio TV 读取 U 盘和本机里的音乐文件。' : '把存有音乐的 U 盘或移动硬盘插到电视上，会自动开始播放。';
     $('mrtv-empty-line2').textContent = noAccess ? '' : '支持 MP3、FLAC、M4A、WAV、OGG；同名的 .lrc 是歌词，文件夹里的 cover.jpg 是封面。';
     $('mrtv-empty-btn').textContent = noAccess ? '按 OK 去授权' : '按 OK 重新扫描';
+    if (online.state === 'ready' && !noAccess) {
+      $('mrtv-empty-line2').textContent = '也可以听在线音乐：网易云的榜单，登录后还有每日推荐和你的歌单。';
+      $('mrtv-empty-btn').textContent = '按 OK 打开在线音乐';
+    }
+    if (currentSong()) { hideEmpty(); return; }
     $('mrtv-empty').classList.add('show');
     if (mode === 'stage') mode = 'empty';
   }
@@ -186,9 +273,11 @@
     for (var i = 0; i < tracks.length; i++) if (tracks[i].key === song.localKey) return tracks[i];
     return null;
   }
-  function playList(indexes, at, resumeAt) {
-    var list = indexes.map(function (i) { return Object.assign({}, songs[i]); });
+  function playList(indexes, at, resumeAt) { playSongs(indexes.map(function (i) { return songs[i]; }), at, resumeAt); }
+  function playSongs(items, at, resumeAt) {
+    var list = items.filter(Boolean).map(function (song) { return Object.assign({}, song); });
     if (!list.length) return;
+    hideEmpty();
     try {
       homeForcedOpen = false; homeSuppressed = false;
       if (has('setHomeControlsLocked')) setHomeControlsLocked(false);
@@ -209,7 +298,8 @@
   }
   function startPlayback() {
     var last = readJson(LAST_KEY);
-    var all = groups[0].indexes;
+    var all = songs.map(function (_, i) { return i; });
+    if (!all.length) return;
     var at = 0, resumeAt = 0;
     if (last && last.key) {
       for (var i = 0; i < tracks.length; i++) if (tracks[i].key === last.key) { at = i; resumeAt = Number(last.time) || 0; break; }
@@ -232,12 +322,12 @@
   function paintHud() {
     var song = currentSong();
     if (!song) return;
-    var track = currentTrack();
+    var art = thumbUrl(song, 300);
     $('mrtv-hud-title').textContent = song.name || '';
     $('mrtv-hud-sub').textContent = [song.artist, song.album].filter(Boolean).join(' · ');
-    $('mrtv-hud-cover').style.backgroundImage = track && track.hasCover ? 'url("' + coverUrl(track) + '")' : '';
+    $('mrtv-hud-cover').style.backgroundImage = art ? 'url("' + art + '")' : '';
     var cur = 0, dur = 0, paused = true;
-    if (typeof audio !== 'undefined' && audio) { cur = audio.currentTime || 0; dur = isFinite(audio.duration) ? audio.duration : (song.duration || 0); paused = audio.paused; }
+    if (typeof audio !== 'undefined' && audio) { cur = audio.currentTime || 0; dur = isFinite(audio.duration) ? audio.duration : (song.mrtvSeconds || (song.localKey ? song.duration : 0) || 0); paused = audio.paused; }
     $('mrtv-hud-fill').style.width = dur > 0 ? (Math.min(1, cur / dur) * 100).toFixed(2) + '%' : '0';
     $('mrtv-hud-time').textContent = fmtTime(cur) + ' / ' + fmtTime(dur);
     $('mrtv-hud-pos').textContent = (currentIdx + 1) + ' / ' + playQueue.length;
@@ -263,13 +353,13 @@
   function hideHud() { $('mrtv-hud').classList.remove('show'); $('mrtv-keys').classList.remove('show'); }
   setInterval(function () {
     var song = currentSong();
-    var key = song ? song.localKey + '#' + currentIdx : '';
+    var key = song ? songKey(song) + '#' + currentIdx : '';
     if (key && key !== lastTrackKey) { lastTrackKey = key; showHud(5200); }
     if ($('mrtv-hud').classList.contains('show')) paintHud();
   }, 500);
   setInterval(function () {
     var song = currentSong();
-    if (!song || typeof audio === 'undefined' || !audio || audio.paused) return;
+    if (!song || !song.localKey || typeof audio === 'undefined' || !audio || audio.paused) return;
     writeJson(LAST_KEY, { key: song.localKey, time: Math.floor(audio.currentTime || 0), at: Date.now() });
   }, 5000);
 
@@ -281,57 +371,126 @@
   }
   function renderLibrary() {
     var g = groups[lib.group] || groups[0];
-    var playingKey = currentSong() ? currentSong().localKey : '';
+    var items = groupItems(g);
+    var playingKey = songKey(currentSong());
     lib.groupTop = windowTop(lib.groupTop, lib.group, groups.length);
-    lib.trackTop = windowTop(lib.trackTop, lib.track, g.indexes.length);
+    lib.track = Math.max(0, Math.min(lib.track, Math.max(0, items.length - 1)));
+    lib.trackTop = windowTop(lib.trackTop, lib.track, items.length);
     var gHtml = '';
     for (var i = lib.groupTop; i < Math.min(groups.length, lib.groupTop + ROWS); i++) {
-      gHtml += '<div class="mrtv-row' + (i === lib.group ? ' sel' : '') + '"><span class="mrtv-main">' + esc(groups[i].title) + '</span><span class="mrtv-side">' + esc(groups[i].note ? groups[i].note + ' · ' : '') + (groups[i].settings ? '' : groups[i].indexes.length) + '</span></div>';
+      var gi = groups[i];
+      var count = gi.settings || gi.login ? '' : (gi.indexes ? gi.indexes.length : (gi.items ? gi.items.length : ''));
+      gHtml += '<div class="mrtv-row' + (i === lib.group ? ' sel' : '') + '"><span class="mrtv-main">' + esc(gi.title) + '</span><span class="mrtv-side">' + esc([gi.note, count].filter(function (v) { return v !== '' && v != null; }).join(' · ')) + '</span></div>';
     }
     var tHtml = '';
-    for (var j = lib.trackTop; j < Math.min(g.indexes.length, lib.trackTop + ROWS); j++) {
-      var t = tracks[g.indexes[j]];
-      var thumb = t.hasCover ? ' style="background-image:url(\'' + coverUrl(t) + '\')"' : '';
-      tHtml += '<div class="mrtv-row' + (j === lib.track ? ' sel' : '') + (t.key === playingKey ? ' playing' : '') + '"><span class="mrtv-thumb"' + thumb + '></span><span class="mrtv-main">' + esc(t.name) + '</span><span class="mrtv-side">' + esc([t.artist, t.duration ? fmtTime(t.duration) : ''].filter(Boolean).join(' · ')) + '</span></div>';
+    if (g.login) tHtml = '<div class="mrtv-note">按 OK，用手机上的网易云音乐 App 扫码登录。<br>登录后这里会出现每日推荐和你的歌单。</div>';
+    else if (g.online && !g.items) { tHtml = '<div class="mrtv-note">' + (g.failed ? '没有加载出来，按 OK 再试一次。' : '正在加载…') + '</div>'; if (!g.failed) loadOnlineGroup(g); }
+    else if (g.settings) tHtml = '<div class="mrtv-note">按 OK 打开设置。</div>';
+    for (var j = lib.trackTop; j < Math.min(items.length, lib.trackTop + ROWS); j++) {
+      var t = items[j];
+      var art = thumbUrl(t, 100);
+      var thumb = art ? ' style="background-image:url(\'' + art + '\')"' : '';
+      var seconds = t.mrtvSeconds || (t.localKey ? t.duration : 0);
+      tHtml += '<div class="mrtv-row' + (j === lib.track ? ' sel' : '') + (songKey(t) === playingKey ? ' playing' : '') + '"><span class="mrtv-thumb"' + thumb + '></span><span class="mrtv-main">' + esc(t.name) + '</span><span class="mrtv-side">' + esc([t.artist, seconds ? fmtTime(seconds) : ''].filter(Boolean).join(' · ')) + '</span></div>';
     }
     $('mrtv-groups').innerHTML = gHtml;
     $('mrtv-tracks').innerHTML = tHtml;
     $('mrtv-groups').classList.toggle('active', lib.col === 0);
     $('mrtv-tracks').classList.toggle('active', lib.col === 1);
-    $('mrtv-lib-note').textContent = songs.length + ' 首' + (libraryInfo.volumes.length ? ' · ' + libraryInfo.volumes.join('、') : '') + (libraryInfo.scanning ? ' · 正在读取信息…' : '');
+    var note = songs.length ? '本地 ' + songs.length + ' 首' + (libraryInfo.volumes.length ? ' · ' + libraryInfo.volumes.join('、') : '') : '没有本地音乐';
+    if (libraryInfo.scanning) note += ' · 正在读取信息…';
+    note += online.state === 'ready' ? (online.user ? ' · 网易云：' + (online.user.nickname || '已登录') : ' · 网易云未登录') : online.state === 'failed' ? ' · 在线音乐不可用' : ' · 在线音乐启动中…';
+    $('mrtv-lib-note').textContent = note;
   }
   function openLibrary() {
-    if (!songs.length) return;
+    if (!groups.length) buildGroups();
     mode = 'library';
     hideHud();
-    var song = currentSong();
-    var g = groups[lib.group] || groups[0];
-    if (song) {
-      for (var j = 0; j < g.indexes.length; j++) if (tracks[g.indexes[j]].key === song.localKey) { lib.track = j; break; }
-    }
-    lib.col = 1;
+    $('mrtv-empty').classList.remove('show');
+    var items = groupItems(groups[lib.group] || groups[0]);
+    var key = songKey(currentSong());
+    if (key) for (var j = 0; j < items.length; j++) if (songKey(items[j]) === key) { lib.track = j; break; }
+    lib.col = items.length ? 1 : 0;
     renderLibrary();
     $('mrtv-library').classList.add('show');
   }
   function libraryKey(key) {
     var g = groups[lib.group] || groups[0];
+    var items = groupItems(g);
     if (key === 'left') { if (lib.col === 1) lib.col = 0; }
-    else if (key === 'right') { if (lib.col === 0) lib.col = 1; }
+    else if (key === 'right') { if (lib.col === 0 && items.length) lib.col = 1; }
     else if (key === 'up' || key === 'down') {
       var d = key === 'up' ? -1 : 1;
       if (lib.col === 0) {
         var ng = Math.max(0, Math.min(groups.length - 1, lib.group + d));
         if (ng !== lib.group) { lib.group = ng; lib.track = 0; lib.trackTop = 0; }
       } else {
-        lib.track = Math.max(0, Math.min(g.indexes.length - 1, lib.track + d));
+        lib.track = Math.max(0, Math.min(items.length - 1, lib.track + d));
       }
     } else if (key === 'ok') {
       if (g.settings) { $('mrtv-library').classList.remove('show'); openSettings(); return; }
-      if (lib.col === 0) lib.col = 1;
-      else if (g.indexes.length) { playList(g.indexes, lib.track, 0); closePanels(); return; }
+      if (g.login) { $('mrtv-library').classList.remove('show'); openLogin(); return; }
+      if (g.online && !g.items) { g.failed = false; loadOnlineGroup(g); }
+      else if (lib.col === 0) { if (items.length) lib.col = 1; }
+      else if (items.length) { playSongs(items, lib.track, 0); closePanels(); return; }
     } else if (key === 'menu') { $('mrtv-library').classList.remove('show'); openSettings(); return; }
-    if ((groups[lib.group] || {}).settings) lib.col = 0;
+    if (!groupItems(groups[lib.group] || {}).length) lib.col = 0;
     renderLibrary();
+  }
+
+  // ---- NetEase sign-in: a QR code for the phone app ------------------------------------------
+  var login = { key: '', timer: 0 };
+  function loginStatus(text, tone) { var n = $('mrtv-login-status'); n.textContent = text; n.className = tone || ''; }
+  function stopLoginPoll() { clearInterval(login.timer); login.timer = 0; }
+  function newLoginCode() {
+    stopLoginPoll();
+    $('mrtv-login-qr').removeAttribute('src');
+    loginStatus('正在生成二维码…');
+    api('/api/login/qr/key').then(function (k) {
+      if (!k || !k.key) throw new Error('no key');
+      login.key = k.key;
+      return api('/api/login/qr/create?key=' + encodeURIComponent(k.key));
+    }).then(function (q) {
+      if (!q || !q.img) throw new Error('no image');
+      if (mode !== 'login') return;
+      $('mrtv-login-qr').src = q.img;
+      loginStatus('打开手机上的网易云音乐 App，扫一扫');
+      login.timer = setInterval(checkLogin, 2000);
+    }).catch(function () { loginStatus('二维码没有生成出来，按 OK 再试', 'fail'); });
+  }
+  function checkLogin() {
+    if (mode !== 'login' || !login.key) { stopLoginPoll(); return; }
+    api('/api/login/qr/check?key=' + encodeURIComponent(login.key)).then(function (r) {
+      if (!r || mode !== 'login') return;
+      if (r.code === 800) { stopLoginPoll(); loginStatus('二维码过期了，按 OK 换一个', 'fail'); }
+      else if (r.code === 802) loginStatus('已扫码，请在手机上确认', 'ok');
+      else if (r.code === 803) {
+        stopLoginPoll();
+        loginStatus('登录成功', 'ok');
+        try { if (has('refreshLoginStatus')) refreshLoginStatus(true); } catch (e) { }
+        setTimeout(function () {
+          refreshOnline().then(function () {
+            $('mrtv-login').classList.remove('show');
+            toast('欢迎 ' + ((online.user && online.user.nickname) || ''));
+            lib.group = Math.max(0, groups.indexOf(online.groups[0])); lib.track = 0; lib.trackTop = 0;
+            openLibrary();
+          });
+        }, 900);
+      }
+    }).catch(function () { });
+  }
+  function openLogin() {
+    if (online.state !== 'ready') { toast(online.state === 'failed' ? '在线音乐不可用' : '在线音乐还在启动，稍等几秒'); return; }
+    mode = 'login';
+    hideHud();
+    $('mrtv-login').classList.add('show');
+    newLoginCode();
+  }
+  function logout() {
+    api('/api/logout').catch(function () { }).then(function () {
+      try { if (has('refreshLoginStatus')) refreshLoginStatus(true); } catch (e) { }
+      return refreshOnline();
+    }).then(function () { toast('已退出网易云账号'); renderSettings(); });
   }
 
   // ---- Settings panel --------------------------------------------------------------------
@@ -370,6 +529,8 @@
       change: function (d) { var q = (fx && fx.performanceQuality) || 'eco'; var i = QUALITY.indexOf(q); i = (Math.max(0, i) + (d || 1) + QUALITY.length) % QUALITY.length; if (has('setPerformanceQualityMode')) setPerformanceQualityMode(QUALITY[i], true); } },
     { title: '节奏分析（镜头随鼓点）', value: function () { return prefs.beat ? '开' : '关'; },
       change: function () { prefs.beat = !prefs.beat; writeJson(PREF_KEY, prefs); } },
+    { title: '网易云账号', value: function () { return online.state !== 'ready' ? (online.state === 'failed' ? '不可用' : '启动中…') : (online.user ? (online.user.nickname || '已登录') + '　按 OK 退出' : '未登录　按 OK 登录'); },
+      change: function () { if (online.user) logout(); else { $('mrtv-settings').classList.remove('show'); openLogin(); } } },
     { title: '重新扫描音乐', value: function () { return songs.length + ' 首'; },
       change: function () { api('/tvapi/rescan').then(function () { toast('正在重新扫描…'); setTimeout(function () { loadLibrary('mount'); }, 1500); }).catch(function () { }); } },
     { title: '退出 Mineradio TV', value: function () { return ''; }, change: function () { exitApp(); } }
@@ -391,7 +552,10 @@
   function closePanels() {
     $('mrtv-library').classList.remove('show');
     $('mrtv-settings').classList.remove('show');
-    mode = songs.length ? 'stage' : 'empty';
+    $('mrtv-login').classList.remove('show');
+    stopLoginPoll();
+    mode = (songs.length || currentSong()) ? 'stage' : 'empty';
+    if (mode === 'empty') showEmpty();
     if (mode === 'stage') showHud(2600);
   }
   function exitApp() {
@@ -410,7 +574,7 @@
   };
   var held = { key: '', repeats: 0 };
   function onBack() {
-    if (mode === 'library' || mode === 'settings') { closePanels(); return true; }
+    if (mode === 'library' || mode === 'settings' || mode === 'login') { closePanels(); return true; }
     var now = Date.now();
     if (now - lastBackAt < 2500) { exitApp(); return false; }
     lastBackAt = now;
@@ -428,9 +592,11 @@
     if (key === 'rw') { seekBy(-15); return; }
     if (mode === 'library') { libraryKey(key); return; }
     if (mode === 'settings') { settingsKey(key); return; }
+    if (mode === 'login') { if (key === 'ok') newLoginCode(); return; }
     if (mode === 'empty') {
       if (key === 'ok') {
-        if (libraryInfo.access === 'none' && native && native.requestAccess) native.requestAccess();
+        if (online.state === 'ready' && libraryInfo.access !== 'none') openLibrary();
+        else if (libraryInfo.access === 'none' && native && native.requestAccess) native.requestAccess();
         else api('/tvapi/rescan').then(function () { setTimeout(function () { loadLibrary('mount'); }, 1200); }).catch(function () { });
       } else if (key === 'menu' || key === 'down') openSettings();
       return;
@@ -537,6 +703,7 @@
     try { if (document.body.classList.contains('splash-active') && has('dismissSplash')) dismissSplash({}); } catch (e) { }
     setTimeout(function () {
       loadLibrary('boot');
+      watchBackend();
       setInterval(function () { if (!songs.length || libraryInfo.scanning) loadLibrary('poll'); }, 4000);
     }, 600);
   })();

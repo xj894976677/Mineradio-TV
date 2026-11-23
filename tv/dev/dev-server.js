@@ -8,7 +8,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { execFileSync, execFile } = require('child_process');
+const { execFileSync, execFile, spawn } = require('child_process');
 
 const MUSIC = path.resolve(process.argv[2] || '.');
 const PORT = Number(process.argv[3] || 8790);
@@ -16,6 +16,35 @@ const PUBLIC = path.resolve(__dirname, '../../public');
 const TV_ASSETS = path.resolve(__dirname, '../app/src/main/assets/tv');
 const AUDIO_RE = /\.(mp3|flac|wav|ogg|m4a|aac|opus)$/i;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream', '.mp3': 'audio/mpeg', '.flac': 'audio/flac', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.aac': 'audio/aac', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
+
+// Mineradio's back end, as the TV app runs it (tv/backend/start.js), on the next port; /api goes there.
+const BACKEND_PORT = PORT + 1;
+const DATA = path.resolve(__dirname, '.data');
+let backendState = 'starting';
+function startBackend() {
+  fs.mkdirSync(DATA, { recursive: true });
+  const child = spawn(process.execPath, [path.resolve(__dirname, '../backend/start.js')], {
+    stdio: ['ignore', 'inherit', 'inherit'],
+    env: Object.assign({}, process.env, {
+      PORT: String(BACKEND_PORT), HOST: '127.0.0.1',
+      COOKIE_FILE: path.join(DATA, 'netease-cookie'), QQ_COOKIE_FILE: path.join(DATA, 'qq-cookie'), KUGOU_COOKIE_FILE: path.join(DATA, 'kugou-cookie'),
+      MINERADIO_BEAT_CACHE_DIR: path.join(DATA, 'beatmaps'), CUEFIELD_FEEDBACK_FILE: path.join(DATA, 'cuefield-feedback.jsonl'), MINERADIO_LISTEN_SYNC_FILE: path.join(DATA, 'listen-sync-journal.json'),
+    }),
+  });
+  child.on('exit', (code) => { backendState = 'failed'; console.log('[tv-dev] back end ended (%s)', code); });
+  process.on('exit', () => child.kill());
+  const probe = setInterval(() => {
+    http.get({ host: '127.0.0.1', port: BACKEND_PORT, path: '/api/app/version', timeout: 800 }, (r) => { r.resume(); if (backendState === 'starting') backendState = 'ready'; clearInterval(probe); }).on('error', () => { });
+  }, 500);
+}
+function proxyApi(req, res) {
+  const upstream = http.request({ host: '127.0.0.1', port: BACKEND_PORT, path: req.url, method: req.method, headers: Object.assign({}, req.headers, { host: '127.0.0.1:' + BACKEND_PORT }) }, (r) => {
+    res.writeHead(r.statusCode, r.headers);
+    r.pipe(res);
+  });
+  upstream.on('error', () => send(res, 502, JSON.stringify({ ok: false, error: 'BACKEND_DOWN' })));
+  req.pipe(upstream);
+}
 
 let tracks = [];
 function walk(dir, depth) {
@@ -102,6 +131,7 @@ http.createServer((req, res) => {
     const t = tracks[Number(url.searchParams.get('id'))];
     if (p === '/tvapi/library') return send(res, 200, JSON.stringify({ ok: true, access: 'all', scanning: false, volumes: [path.basename(MUSIC)], tracks: tracks.map(publicTrack) }));
     if (p === '/tvapi/rescan') { scan(); return send(res, 200, JSON.stringify({ ok: true })); }
+    if (p === '/tvapi/backend') return send(res, 200, JSON.stringify({ ok: true, state: backendState, error: '' }));
     if (p === '/tvapi/device') return send(res, 200, JSON.stringify({ ok: true, dev: true, model: 'dev-server' }));
     if (!t) return send(res, 404, '{"ok":false}');
     if (p === '/tvapi/audio') return sendFile(req, res, t._file);
@@ -117,10 +147,10 @@ http.createServer((req, res) => {
     }
     return send(res, 404, '{"ok":false}');
   }
-  if (p.startsWith('/api/')) return send(res, 200, JSON.stringify({ ok: false, code: 503, offline: true, error: 'OFFLINE_TV' }));
+  if (p.startsWith('/api/')) return proxyApi(req, res);
   if (p === '/' || p === '/index.html') return send(res, 200, injectTv(fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8')), MIME['.html']);
   if (p.startsWith('/tv/')) return sendFile(req, res, path.join(TV_ASSETS, path.normalize(p.slice(4)).replace(/^(\.\.[\/\\])+/, '')));
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
   if (!file.startsWith(PUBLIC)) return send(res, 403, 'forbidden', 'text/plain');
   sendFile(req, res, file);
-}).listen(PORT, '127.0.0.1', () => { scan(); console.log('[tv-dev] http://127.0.0.1:%d', PORT); });
+}).listen(PORT, '127.0.0.1', () => { scan(); startBackend(); console.log('[tv-dev] http://127.0.0.1:%d', PORT); });

@@ -1,8 +1,8 @@
 # Mineradio TV
 
-把 [Mineradio](https://github.com/XxHuberrr/Mineradio-paused) 的粒子舞台搬到 Android 电视上，用来播放 U 盘和移动硬盘里的音乐。不联网、不登录、不需要服务器，插上 U 盘就开始播放，全程用遥控器操作。
+把 [Mineradio](https://github.com/XxHuberrr/Mineradio-paused) 的粒子舞台搬到 Android 电视上。可以播放 U 盘和移动硬盘里的音乐，也可以扫码登录网易云音乐听在线歌曲。所有东西都在一个安装包里，不需要另外的电脑或服务器，全程用遥控器操作。
 
-> **状态：早期版本（0.1.0）。** 界面和播放逻辑已经在电脑浏览器里测过，APK 可以编译；**还没有在真实电视上完成验证**，粒子效果在电视芯片上的流畅度也还没测。
+> **状态：早期版本（0.2.0）。** 界面和播放逻辑已经在电脑浏览器里测过，APK 可以编译；**还没有在真实电视上完成验证**，粒子效果在电视芯片上的流畅度也还没测。
 
 ## 和原版 Mineradio 的关系
 
@@ -10,12 +10,14 @@ Mineradio TV 是 [XxHuberrr/Mineradio-paused](https://github.com/XxHuberrr/Miner
 
 - **视觉全部来自原版。** 粒子、镜头、歌词舞台、13 种视觉形态都是 Mineradio 的网页界面（仓库里的 `public/`），这里**一行没改**，直接打包进电视应用。
 - **TV 版新增的东西都在 `tv/` 目录**：一个 Android TV 外壳、离线曲库，以及盖在舞台上的遥控器操作层。
-- **没有带上的部分**：原版的在线音源和账号登录（`server.js`、各平台的 `*-api.js`）、桌面歌词、壁纸模式、搜索和首页。TV 版只做离线播放。
+- **在线音乐用的是原版的后端**（`server.js` 和网易云、QQ、酷狗的接口模块），同样没有修改，和 Node.js 运行库一起打包进安装包，在电视本机运行，只监听 `127.0.0.1`。
+- **没有带上的部分**：汽水音乐（它的模块依赖 Electron，并且包含受保护音频的解密代码，TV 版不带）、桌面歌词、壁纸模式、原版的首页和搜索界面。
 
 原版是 Windows 桌面播放器，作者已宣布长期停更并欢迎二次创作。想在电脑上用，请去[原项目](https://github.com/XxHuberrr/Mineradio-paused)或它的官网 [mineradio.cn](https://mineradio.cn/)。Mineradio 的名称、MR 标识和视觉设计属于原作者。
 
 ## 功能
 
+- **网易云音乐**：电视上显示二维码，用手机 App 扫码登录；登录后有每日推荐和你的歌单，不登录也能听榜单。登录信息只保存在电视上。
 - **插上就播**：自动扫描 U 盘、移动硬盘和电视本机里的音乐，插拔 U 盘会自动刷新。
 - **接着上次播**：记住上次播放的歌曲和进度，下次打开从那里继续。
 - **标准的离线曲库**：从文件标签读取标题、歌手、专辑、时长和内嵌封面；按全部歌曲、文件夹、专辑、艺人浏览。
@@ -77,17 +79,25 @@ adb shell appops set tv.mineradio.app MANAGE_EXTERNAL_STORAGE allow
 
 ## 编译
 
-需要 JDK 17 和 Android SDK（平台 35）。
+需要 JDK 17、Android SDK（平台 35）和 Node.js。
 
 ```bash
+npm install --omit=dev          # 后端的依赖，会打包进 APK
 cd tv
 echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 ./gradlew :app:assembleDebug
 ```
 
+在线音乐还需要两个不在仓库里的运行库，放进 `tv/app/src/main/jniLibs/arm64-v8a/`：
+
+- `libnode.so`：来自 [nodejs-mobile](https://github.com/nodejs-mobile/nodejs-mobile/releases) v18.20.4 的 `nodejs-mobile-v18.20.4-android.zip`（`bin/arm64-v8a/`）；
+- `libc++_shared.so`：来自 Android NDK（`toolchains/llvm/prebuilt/*/sysroot/usr/lib/aarch64-linux-android/`）。
+
+仓库里已有的 `libnodebridge.so` 是 `tv/native/node_bridge.c` 编译出来的，重新编译见 `tv/native/build.sh`。缺少这两个运行库时应用照常编译，只是没有在线音乐。
+
 ## 在电脑上调试
 
-不用电视也能看效果。开发服务器提供和电视应用相同的接口，用电脑上的音乐文件夹当曲库（需要 Node.js 和 ffmpeg）：
+不用电视也能看效果。开发服务器提供和电视应用相同的接口，同样会启动后端，用电脑上的音乐文件夹当曲库（需要 Node.js 和 ffmpeg，先在仓库根目录 `npm install --omit=dev`）：
 
 ```bash
 node tv/dev/dev-server.js ~/Music
@@ -102,8 +112,11 @@ node tv/dev/dev-server.js ~/Music
 | `public/` | Mineradio 原版网页界面，未修改 |
 | `tv/app/` | Android TV 应用：全屏 WebView、请求路由（`TvRouter.kt`）、离线曲库（`MusicLibrary.kt`） |
 | `tv/app/src/main/assets/tv/` | TV 操作层：按键、曲库和设置面板、正在播放卡片、开场标题 |
+| `tv/backend/start.js` | 启动原版后端的入口，把不带的模块换成「不可用」 |
+| `tv/native/` | 启动 Node 的那一个原生函数 |
 | `tv/dev/` | 电脑上用的开发服务器 |
-| 其余文件 | 原版桌面端的代码，TV 版不使用，为了方便同步上游而保留 |
+| `server.js`、`*-api.js`、`cuefield/` 等 | 原版后端，未修改，打包进应用 |
+| 其余文件（`desktop/`、`qishui-*` 等） | 原版桌面端的代码，TV 版不使用，为了方便同步上游而保留 |
 
 ## 同步上游
 
@@ -115,9 +128,15 @@ git merge upstream/main
 
 TV 版的代码只在 `tv/` 和本文件里，合并上游一般只有 README 会冲突。
 
+## 在线音乐的限制
+
+- 目前界面上只接了**网易云音乐**（扫码登录、每日推荐、我的歌单、榜单）。QQ 音乐和酷狗在原版里是粘贴 Cookie 登录，电视上还没有合适的输入方式，后端已经打包，界面待做。搜索也还没做。
+- 走的是非官方接口，平台改动后可能失效；能听哪些歌、什么音质取决于你自己的账号。请遵守各平台的服务协议。
+- 在线音乐需要 64 位 ARM 的电视（Node 运行库只打包了 arm64）。其他设备上在线部分不可用，本地播放不受影响。
+
 ## 隐私
 
-应用不联网：页面的所有请求都由应用自己应答，原版的在线接口一律返回「离线」。应用只读取存储设备上的音乐、歌词和封面文件，播放进度和设置保存在电视本地。
+没有任何第三方服务器：页面和后端都运行在电视本机。联网只发生在你使用在线音乐时，连接的是音乐平台自己的服务器。账号登录信息、播放进度和设置都只保存在电视本地。
 
 ## 许可证
 

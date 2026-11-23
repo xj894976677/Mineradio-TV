@@ -13,21 +13,24 @@ import java.io.RandomAccessFile
 import java.util.Locale
 
 /**
- * Answers every request the WebView makes, so the page is one origin and nothing leaves the TV:
+ * Serves the page. Its origin is the address the back end listens on (Backend.kt), so the page's
+ * own "/api/..." calls reach Mineradio's server.js untouched, request bodies included (a WebView
+ * does not show those to an interceptor):
  *
  *   /                 Mineradio's index.html with the TV layer added (tv-preload.js, tv.css, tv.js)
  *   /js, /css, ...    Mineradio's files, straight from the assets (the repository's public/)
  *   /tv/...           the TV layer (assets/tv)
- *   /tvapi/...        the offline library: list, audio (with byte ranges, for seeking), cover, lyric
- *   /api/...          Mineradio's online back end: answered "offline"
- *   any other host    an empty 204
+ *   /tvapi/...        the offline library: list, audio (with byte ranges, for seeking), cover,
+ *                     lyric; and the back end's state
+ *   /api/...          not answered here: the WebView goes on to the back end on this TV
+ *   any other host    not answered here: covers and audio of the music services
  *
  * tv/dev/dev-server.js serves the same contract on a desktop.
  */
 class TvRouter(private val context: Context, private val onRescan: () -> Unit) {
     companion object {
-        const val HOST = "app.mineradio.tv"
-        const val ORIGIN = "https://$HOST"
+        const val HOST = "127.0.0.1"
+        const val ORIGIN = "http://$HOST:${Backend.PORT}"
         private val MIME = mapOf(
             "html" to "text/html", "js" to "text/javascript", "css" to "text/css", "json" to "application/json",
             "png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "webp" to "image/webp", "svg" to "image/svg+xml",
@@ -41,15 +44,15 @@ class TvRouter(private val context: Context, private val onRescan: () -> Unit) {
         private const val BODY_TAG = "<link rel=\"stylesheet\" href=\"tv/tv.css\"><script src=\"tv/tv.js\"></script>"
     }
 
-    fun handle(request: WebResourceRequest): WebResourceResponse {
+    fun handle(request: WebResourceRequest): WebResourceResponse? {
         val uri = request.url
-        if (uri.host != HOST) return empty(204, "No Content")
+        if (uri.host != HOST || uri.port != Backend.PORT) return null
         val path = uri.path?.ifEmpty { "/" } ?: "/"
+        if (path.startsWith("/api/")) return null
         return try {
             when {
                 path == "/" || path == "/index.html" -> index()
                 path.startsWith("/tvapi/") -> tvApi(path, uri, request)
-                path.startsWith("/api/") -> json("{\"ok\":false,\"code\":503,\"offline\":true,\"error\":\"OFFLINE_TV\"}")
                 else -> asset(path.trimStart('/'))
             }
         } catch (e: Throwable) {
@@ -79,6 +82,7 @@ class TvRouter(private val context: Context, private val onRescan: () -> Unit) {
         when (path) {
             "/tvapi/library" -> return json(MusicLibrary.json(context))
             "/tvapi/rescan" -> { onRescan(); return json("{\"ok\":true}") }
+            "/tvapi/backend" -> return json(org.json.JSONObject().put("ok", true).put("state", Backend.state).put("error", Backend.error).toString())
             "/tvapi/device" -> return json("{\"ok\":true,\"model\":\"${Build.MODEL.replace("\"", "")}\",\"sdk\":${Build.VERSION.SDK_INT}}")
         }
         val track = uri.getQueryParameter("id")?.toIntOrNull()?.let { MusicLibrary.track(it) } ?: return json("{\"ok\":false}", 404, "Not Found")

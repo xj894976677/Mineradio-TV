@@ -4,3 +4,8 @@ local.properties
 *.apk
 *.keystore
 *.jks
+# nodejs-mobile's libnode.so (62 MB) and the NDK's libc++_shared.so: fetched, not kept here
+app/src/main/jniLibs/*/libnode.so
+app/src/main/jniLibs/*/libc++_shared.so
+native/*.o
+dev/.data/
