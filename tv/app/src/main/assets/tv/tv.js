@@ -11,7 +11,7 @@
 // The same /tvapi contract is served by tv/dev/dev-server.js for work in a desktop browser.
 (function () {
   if (window.MRTV) return;
-  var TV = window.MRTV = { version: '0.6.0' };
+  var TV = window.MRTV = { version: '0.7.0' };
   var native = window.MineradioTVNative || null;
   var LAST_KEY = 'mrtv-last-v1';
   var PREF_KEY = 'mrtv-prefs-v1';

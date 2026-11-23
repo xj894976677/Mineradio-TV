@@ -13,8 +13,8 @@ android {
         applicationId = "tv.mineradio.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.7.0"
     }
 
     // The web UI is Mineradio's own, unmodified: public/ at the repository root is packaged as
