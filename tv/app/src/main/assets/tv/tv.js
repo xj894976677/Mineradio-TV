@@ -428,6 +428,12 @@
     return Math.max(0, Math.min(top, Math.max(0, count - ROWS)));
   }
   var CARDS = 6;
+  /** How many cards a row holds: a card is 16.4vh wide with a 1.6vh gap (tv.css). */
+  function cardsPerRow() {
+    var vh = window.innerHeight / 100;
+    var width = ($('mrtv-library').clientWidth || window.innerWidth) - window.innerWidth * 0.10;
+    return Math.max(3, Math.floor((width + 1.6 * vh) / (18 * vh)));
+  }
   function secPos(i) { var s = sections[i]; var p = lib.pos[s ? s.title : ''] || 0; return s ? Math.max(0, Math.min(p, s.groups.length - 1)) : 0; }
   function focusedGroup() { var s = sections[lib.sec]; return s ? s.groups[secPos(lib.sec)] : null; }
   function cardHtml(g, focused) {
@@ -441,6 +447,7 @@
     // cards around its own position, so a drive with a thousand albums stays light.
     var first = Math.max(0, Math.min(lib.sec - 1, sections.length - 3));
     var html = '';
+    CARDS = cardsPerRow();
     for (var i = first; i < Math.min(sections.length, first + 3); i++) {
       var s = sections[i], at = secPos(i);
       var start = Math.max(0, Math.min(at - 2, s.groups.length - CARDS));

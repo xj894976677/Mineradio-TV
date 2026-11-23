@@ -82,21 +82,26 @@ html.mrtv #upload-actions, html.mrtv #thumb-wrap, html.mrtv #splash, html.mrtv #
 #mrtv-login-status.ok { color: #7fe3b0; }
 #mrtv-login-status.fail { color: #ff9a8f; }
 
-/* Library: a wall of cards by section; a card opens its songs. */
+/* Library: a wall of cards by section; a card opens its songs. Sizes follow the screen's height,
+   so three rows fit whatever its shape; how many cards a row shows follows its width (tv.js). */
+#mrtv-library { padding: 5vh 5vw 3.5vh; }
+#mrtv-library h2 { margin-bottom: 1.6vh; font-size: 3.8vh; }
+#mrtv-library .mrtv-foot { margin-top: 1.2vh; }
 #mrtv-lib-body { display: block; }
 /* Room around the rows: the focused card grows, and must not be cut by the wall's own edge. */
-#mrtv-cards { height: calc(100% + 3vh); display: flex; flex-direction: column; gap: 2.2vh; overflow: hidden; padding: 1.5vh 1.5vw; margin: -1.5vh -1.5vw; }
-.mrtv-sec-title { font-size: 2.5vh; color: rgba(255, 255, 255, .5); margin-bottom: 1.2vh; display: flex; align-items: baseline; gap: 1vw; }
+#mrtv-cards { height: calc(100% + 3vh); display: flex; flex-direction: column; gap: 1.2vh; overflow: hidden; padding: 1.5vh 1.5vw; margin: -1.5vh -1.5vw; }
+.mrtv-sec { flex: none; }
+.mrtv-sec-title { font-size: 2.2vh; color: rgba(255, 255, 255, .5); margin-bottom: .7vh; display: flex; align-items: baseline; gap: 1vw; }
 .mrtv-sec.active .mrtv-sec-title { color: #fff; }
-.mrtv-sec-title small { font-size: 1.8vh; color: rgba(255, 255, 255, .38); }
-.mrtv-sec-row { display: flex; gap: 1.5vw; }
-.mrtv-card { width: 13.6vw; flex: none; padding: .7vh; border-radius: 1.8vh; border: .35vh solid transparent; opacity: .62; transition: transform .16s ease, opacity .16s ease; }
+.mrtv-sec-title small { font-size: 1.7vh; color: rgba(255, 255, 255, .38); }
+.mrtv-sec-row { display: flex; gap: 1.6vh; }
+.mrtv-card { width: 16.4vh; flex: none; padding: .6vh; border-radius: 1.6vh; border: .3vh solid transparent; opacity: .62; transition: transform .16s ease, opacity .16s ease; }
 .mrtv-sec.active .mrtv-card { opacity: .9; }
-.mrtv-card-art { width: 100%; padding-bottom: 100%; position: relative; border-radius: 1.3vh; background: linear-gradient(135deg, #2b2440, #121018) center/cover no-repeat; overflow: hidden; }
-.mrtv-card-art span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 7vh; font-weight: 600; color: rgba(255, 255, 255, .5); }
+.mrtv-card-art { width: 100%; padding-bottom: 100%; position: relative; border-radius: 1.1vh; background: linear-gradient(135deg, #2b2440, #121018) center/cover no-repeat; overflow: hidden; }
+.mrtv-card-art span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 6vh; font-weight: 600; color: rgba(255, 255, 255, .5); }
 .mrtv-card.plain .mrtv-card-art { background: linear-gradient(135deg, #24242c, #101014); }
-.mrtv-card-title { margin-top: 1vh; font-size: 2.2vh; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mrtv-card-note { margin-top: .3vh; font-size: 1.7vh; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrtv-card-title { margin-top: .7vh; font-size: 1.9vh; line-height: 1.25; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrtv-card-note { margin-top: .2vh; font-size: 1.5vh; line-height: 1.25; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mrtv-card.sel { opacity: 1; border-color: #fff; background: rgba(255, 255, 255, .1); transform: scale(1.04); }
 #mrtv-open { height: 100%; display: flex; gap: 3vw; }
 #mrtv-open-side { width: 24vw; flex: none; }
