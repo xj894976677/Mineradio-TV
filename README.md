@@ -1,158 +1,128 @@
-# Mineradio
+# Mineradio TV
 
-## 🌐 Mineradio 官网：[mineradio.cn](https://mineradio.cn/)
+把 [Mineradio](https://github.com/XxHuberrr/Mineradio-paused) 的粒子舞台搬到 Android 电视上，用来播放 U 盘和移动硬盘里的音乐。不联网、不登录、不需要服务器，插上 U 盘就开始播放，全程用遥控器操作。
 
-> [!IMPORTANT]
-> **Mineradio 官网：<https://mineradio.cn/>**
->
-> 请收藏官网，从官网进入下载页，避免误入同名网站或第三方下载页。
-> [官网下载入口](https://mineradio.cn/download.html) · [官网链接的网页版：mineradio.art](https://mineradio.art/)
+> **状态：早期版本（0.1.0）。** 界面和播放逻辑已经在电脑浏览器里测过，APK 可以编译；**还没有在真实电视上完成验证**，粒子效果在电视芯片上的流畅度也还没测。
 
-> **项目状态：长期停更**
->
-> 目前因个人原因，Mineradio 项目处于长期停更状态。感兴趣的个人玩家可随意使用本项目进行创作，也可以自行修改和修复 bug。希望各位玩得开心，也希望世界和平，享受我们的音乐。
->
-> 本仓库保留公开源码、历史版本和下载说明，方便个人玩家 Fork、建立分支或制作二创版本。
+## 和原版 Mineradio 的关系
 
-## 认准官网，避免走错下载页
+Mineradio TV 是 [XxHuberrr/Mineradio-paused](https://github.com/XxHuberrr/Mineradio-paused) 的 fork，舞台本身完全依赖原项目：
 
-> [!WARNING]
-> **搜索结果标题中的“官网”“官方版”“最新版”，不代表该页面就是 Mineradio 官网。**
-> 请检查地址栏，认准 **`mineradio.cn`**；安装包与网盘链接请从[官网下载页](https://mineradio.cn/download.html)进入。
-> **已确认冒充官方入口的域名：`mineradiobfq.cn`。请勿误入。**
+- **视觉全部来自原版。** 粒子、镜头、歌词舞台、13 种视觉形态都是 Mineradio 的网页界面（仓库里的 `public/`），这里**一行没改**，直接打包进电视应用。
+- **TV 版新增的东西都在 `tv/` 目录**：一个 Android TV 外壳、离线曲库，以及盖在舞台上的遥控器操作层。
+- **没有带上的部分**：原版的在线音源和账号登录（`server.js`、各平台的 `*-api.js`）、桌面歌词、壁纸模式、搜索和首页。TV 版只做离线播放。
 
-### 仿冒官网 / 官方入口：请勿误入
+原版是 Windows 桌面播放器，作者已宣布长期停更并欢迎二次创作。想在电脑上用，请去[原项目](https://github.com/XxHuberrr/Mineradio-paused)或它的官网 [mineradio.cn](https://mineradio.cn/)。Mineradio 的名称、MR 标识和视觉设计属于原作者。
 
-**`mineradiobfq.cn` 不是 Mineradio 官网。请勿从该站下载安装包、提交账号信息或付款；请认准 [mineradio.cn](https://mineradio.cn/)。**
+## 功能
 
-| 仿冒域名（仅供辨识） | 已核查的冒充方式 | 正确入口 |
-| --- | --- | --- |
-| `mineradiobfq.cn` | 页面使用 Mineradio 名称、MR 标识和产品截图；页脚自称“Mineradio官方入口与使用指南站点”，并提供该站自己的网盘下载入口。 | [Mineradio 官网](https://mineradio.cn/) · [官网下载页](https://mineradio.cn/download.html) |
+- **插上就播**：自动扫描 U 盘、移动硬盘和电视本机里的音乐，插拔 U 盘会自动刷新。
+- **接着上次播**：记住上次播放的歌曲和进度，下次打开从那里继续。
+- **标准的离线曲库**：从文件标签读取标题、歌手、专辑、时长和内嵌封面；按全部歌曲、文件夹、专辑、艺人浏览。
+- **歌词**：和歌曲同名的 `.lrc` 文件会显示在歌词舞台上（支持 UTF-8、UTF-16、GBK）。
+- **封面**：优先用文件内嵌的封面；没有的话用同名图片，或文件夹里的 `cover.jpg` / `folder.jpg`。
+- **13 种视觉形态**，播放时按上下键随时切换。
+- **支持的格式**：MP3、FLAC、M4A、AAC、WAV、OGG、Opus（取决于电视系统 WebView 的解码能力）。
 
-核查日期：**2026-11-09**。以上判定针对“冒充官方身份”，未检测该站安装包，不据此声称其含有恶意程序。域名以纯文本展示，避免误点；同名、相似拼写或加上 `bfq` 等后缀，都不代表官方身份。官网链接的网页版 `mineradio.art` 不在此名单内。
+## 遥控器
 
-### 第三方软件下载页：认清页面归属
+| 按键 | 作用 |
+| --- | --- |
+| ◀ ▶ | 上一首 / 下一首；长按快退 / 快进 |
+| ▲ ▼ | 切换视觉形态 |
+| OK | 播放 / 暂停；长按打开曲库 |
+| 菜单 | 设置：播放顺序、歌词、画面精细度、重新扫描 |
+| 返回 | 关闭面板；在舞台上连按两次退出 |
 
-以下是容易混淆的**第三方介绍 / 下载页面示例，并非 Mineradio 官网**。仅供辨识，不作为下载推荐。核查日期：**2026-11-09**。
+遥控器没有菜单键时，曲库的最后一行是「设置…」。
 
-| 非官网页面 | 页面上的字样或信息 | 如何辨识 |
-| --- | --- | --- |
-| `shouyou.3dmgame.com` · [3DM 页面](https://shouyou.3dmgame.com/android/555111.html) | 标题为“Mineradio 官方版”，列出的版本为 `1.12`。 | 这是 3DM 的软件下载页；“官方版”字样不能证明页面由 Mineradio 官方运营。 |
-| `cr173.com` · [西西页面](https://www.cr173.com/soft/1670750.html) | 标题为“Mineradio音乐软件官方版”，其“官方网站”字段另行指向 `mineradio.cn`。 | 软件站页面与它引用的官网是两个不同入口，请进入官网获取下载信息。 |
-| `5577.com` · [5577 页面](https://www.5577.com/s/735837.html) | 标题含“最新版官方”，其“应用官网”字段指向 `mineradio.cn`。 | 不要仅凭“最新版”字样选包；请以官网下载页公布的版本与链接为准。 |
+## 视觉形态
 
-以上仅核对页面信息，未检测这些站点的安装包，不据此认定其为盗版、改包或恶意软件。社区 Fork、二创和转载也不因“非官网”身份自动成为盗版。
+按上下键依次切换：emily 专辑封面、月蚀圣环、雨幕霓虹、折光蝶群、深海绽放、安魂、音域回响 Sonic-Topography、音域回响 Wallpaper Engine、星河、唱片、星球、滚筒、虚空。
 
----
+这些都是原版 Mineradio 的预设，作者信息见 [NOTICE.md](./NOTICE.md)。
 
-![Mineradio 暗场启动页](./docs/assets/readme/cinema-beat-smoke.png)
+## 怎么整理音乐
 
-Mineradio 是一款 Windows 桌面沉浸式音乐播放器，把搜索播放、歌词舞台、粒子视觉、3D 歌单架和完整桌面模式组合成一个更接近现场感的私人音乐空间。
-
-## 立即下载 Windows 安装包
-
-> 本次下载入口已更换，请使用下面的新网盘链接，并更新旧收藏。通过公告中的网盘入口下载，可以继续使用现有版本；项目目前处于长期停更状态。
-
-| 下载入口 | 推荐人群 | 链接 |
-| --- | --- | --- |
-| 夸克盘 | 夸克用户 | [下载 Mineradio 2.2.0](https://pan.quark.cn/s/4b124d3e81d3) |
-| 百度云 | 百度网盘用户（提取码 `SJHP`） | [下载 Mineradio 2.2.0](https://pan.baidu.com/s/17CwpHUza67w_Grgc3s5nOw?pwd=SJHP) |
-| GitHub Release | 版本说明与源码 | [查看 Mineradio 2.2.0](https://github.com/XxHuberrr/Mineradio/releases/tag/v2.2.0) |
-
-本页、发布公告和软件更新入口使用相同的两条新链接。旧分享地址不再作为本次版本的下载入口。
-
-安装时只需要下载并运行 `Mineradio-2.2.0-Setup.exe`。不要把 `.blockmap`、`latest.yml` 或 `win-unpacked` 当成正式安装包。
-
-2.1.0 用户如果未看到更新提醒，请从托盘彻底退出后重新打开软件，切回普通窗口，等待约 30 秒后查看右上角更新箭头。旧版不会自动弹出公告；也可以直接使用上面的新网盘链接下载安装包。
-
-## 下载或安装被拦截怎么办
-
-小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自本次公告的下载入口，文件名是 `Mineradio-2.2.0-Setup.exe`。
-
-1. 浏览器下载栏提示风险时，打开下载列表，点这条下载右侧的 `...` 三个点，选择 `保留` / `仍要保留` / `显示更多` 后继续保留。
-2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
-3. 如果杀毒软件明确显示木马、高危或已经隔离，不要强行运行；删除该文件后重新从上面的网盘入口下载，仍然异常请带截图反馈给作者。
-
-## 作者支持
-
-如果 Mineradio 陪你多听了一首歌，也欢迎请作者一杯咖啡。
-
-[查看完整支持页](./docs/SUPPORT.md)
-
-![Mineradio 作者支持渠道](./docs/assets/support/mineradio-author-support-poster.png)
-
-Mineradio 2.2 是历史稳定版本，修复了音乐接口的登录与播放问题，改善歌单加载和网络异常恢复，并加入更多手势操作与粒子预设。
-
-## 当前版本
-
-当前版本：`2.2.0`
-
-状态：Mineradio 2.2.0 历史正式版；项目目前长期停更。
-
-> 安全提示：`v1.0.10` 及更早旧安装包不再建议继续安装或传播。请使用本次公告提供的 `Mineradio-2.2.0-Setup.exe`。
-
-## 核心特性
-
-- 首页包含每日推荐、平台推荐、继续听、听歌画像和我的歌单入口
-- 完整桌面模式保留播放器、主页、歌单和桌面交互
-- 支持本地 MP4 与 Wallpaper Engine 视觉内容
-- 播放后切换到 Emily / 默认播放态视觉，歌词舞台与粒子舞台同步工作
-- 基于节奏的电影镜头视觉系统
-- 面向长播客和 DJ 曲目的专属视觉模式
-- 歌词舞台、自定义歌词、歌词位置与视觉控制
-- 自定义专辑封面上传与裁剪
-- 右键唤起 3D 歌单架，支持歌单队列浏览
-- 网易云音乐账号、搜索、歌单、播客等体验接入
-- QQ 音乐搜索、登录态与音源补充接入
-- GitHub Releases 更新检测与下载入口
-- 首次启动内置「默认测试」视觉用户存档，软件内默认视觉参数与该存档一致
-
-## 使用说明
-
-Windows 用户可以从本次发布公告列出的新网盘入口下载安装包。
-
-正式分发以 `Mineradio-2.2.0-Setup.exe` 为准，不建议直接使用 `win-unpacked` 目录。安装包会创建桌面快捷方式。
-
-已经安装过旧版本的用户可直接运行 `Mineradio-2.2.0-Setup.exe` 完成更新。软件内更新入口只会打开浏览器下载页，不会在客户端内下载或应用补丁。
-
-## 开发运行
-
-```bash
-npm install
-npm start
-npm run build:win
+```
+U 盘/
+├── 周杰伦 - 叶惠美/
+│   ├── cover.jpg          ← 这个文件夹里没有内嵌封面的歌用它
+│   ├── 01 以父之名.flac
+│   ├── 01 以父之名.lrc     ← 同名 .lrc 是歌词
+│   └── 02 懦夫.flac
+└── 随便听听/
+    └── 某首歌.mp3
 ```
 
-桌面版入口由 Electron 主进程加载本地服务。`npm run build:win` 会生成 Windows NSIS 安装包，产物位于 `dist/`。
+U 盘建议格式化成 exFAT 或 FAT32。文件夹最多扫描 10 层，名为 `Android`、`Ringtones`、`Notifications`、`Alarms` 的系统文件夹会跳过。
 
-## 更新机制
+## 安装
 
-Mineradio 会请求 GitHub Releases latest 检测新版本。远端版本高于本地版本时，应用内更新入口会展示 Release 内容，并通过系统浏览器打开可选网盘线路；即使 Release 附带完整安装包，`2.0.3+` 客户端也不会读取、下载、缓存或应用该附件与补丁。
+目前没有发布安装包，需要自己编译（见下），然后用 adb 安装：
 
-本地验证更新链路时，可以通过 `MINERADIO_UPDATE_MANIFEST` 指向一个本地 manifest JSON 或 HTTP 地址来模拟线上 Release。
+```bash
+adb install -r tv/app/build/outputs/apk/debug/app-debug.apk
+```
 
-## 第三方音乐平台说明
+读取 U 盘里的歌词和封面图片需要「所有文件访问」权限。第一次打开时应用会引导授权；电视的设置里没有这个页面时，用 adb 授权：
 
-Mineradio 不是网易云音乐、QQ 音乐或腾讯音乐娱乐集团的官方客户端，也不隶属于任何音乐平台。
+```bash
+adb shell appops set tv.mineradio.app MANAGE_EXTERNAL_STORAGE allow
+```
 
-项目中的第三方平台接入仅用于个人学习、本地客户端体验和用户自有账号的播放辅助。请遵守对应平台的用户协议、版权规则和会员权益规则。项目不会提供绕过付费、绕过会员、破解音质或重新分发音乐内容的能力。
+没有这个权限时，应用退回到只读取音频文件：能播放、能显示内嵌封面，但读不到 `.lrc` 和 `cover.jpg`。
 
-## 用户数据与隐私
+要求 Android 7.0 及以上的 Android TV 或电视盒子。
 
-登录 Cookie、搜索历史、自定义封面、自定义歌词、节奏分析缓存等数据只应保存在本机用户数据目录或浏览器本地存储中，不应提交到仓库。
+## 编译
 
-更多说明见 [PRIVACY.md](./PRIVACY.md)。
+需要 JDK 17 和 Android SDK（平台 35）。
+
+```bash
+cd tv
+echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
+./gradlew :app:assembleDebug
+```
+
+## 在电脑上调试
+
+不用电视也能看效果。开发服务器提供和电视应用相同的接口，用电脑上的音乐文件夹当曲库（需要 Node.js 和 ffmpeg）：
+
+```bash
+node tv/dev/dev-server.js ~/Music
+```
+
+然后打开 <http://127.0.0.1:8790>。键盘方向键对应遥控器方向键，回车是 OK，Esc 是返回，Tab 是菜单。
+
+## 目录
+
+| 路径 | 内容 |
+| --- | --- |
+| `public/` | Mineradio 原版网页界面，未修改 |
+| `tv/app/` | Android TV 应用：全屏 WebView、请求路由（`TvRouter.kt`）、离线曲库（`MusicLibrary.kt`） |
+| `tv/app/src/main/assets/tv/` | TV 操作层：按键、曲库和设置面板、正在播放卡片、开场标题 |
+| `tv/dev/` | 电脑上用的开发服务器 |
+| 其余文件 | 原版桌面端的代码，TV 版不使用，为了方便同步上游而保留 |
+
+## 同步上游
+
+```bash
+git remote add upstream https://github.com/XxHuberrr/Mineradio-paused.git
+git fetch upstream
+git merge upstream/main
+```
+
+TV 版的代码只在 `tv/` 和本文件里，合并上游一般只有 README 会冲突。
+
+## 隐私
+
+应用不联网：页面的所有请求都由应用自己应答，原版的在线接口一律返回「离线」。应用只读取存储设备上的音乐、歌词和封面文件，播放进度和设置保存在电视本地。
+
+## 许可证
+
+[GPL-3.0-only](./LICENSE)，与原项目相同。修改版同样以 GPL-3.0 发布，本仓库就是对应的完整源码。第三方组件和原项目的致谢见 [NOTICE.md](./NOTICE.md)。
 
 ## 致谢
 
-Mineradio 由 XxHuberrr 主要设计与打造。emily 作为早期视觉底层想法与 `emily` 视觉预设改进方向的共创者和灵感来源之一，特此感谢。
-
-同时感谢小天才e宝、应春日、锋将军、軌跡、林中、骊、风痕、花椰菜🥦在早期体验、测试反馈和发布准备中的帮助。
-
-## 版权与授权
-
-Copyright (C) 2026 XxHuberrr.
-
-本项目采用 GPL-3.0 授权。详见 [LICENSE](./LICENSE)。
-
-MR Logo、Mineradio 名称、界面视觉设计与原创视觉表达归作者所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
+感谢 [XxHuberrr](https://github.com/XxHuberrr) 和 Mineradio 的所有贡献者，TV 版的每一帧画面都来自他们的工作。
